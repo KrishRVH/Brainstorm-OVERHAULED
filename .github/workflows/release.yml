@@ -1,0 +1,136 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-latest
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BUILD_SHA: ${{ github.sha }}
+      RELEASE_TAG: latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Set up mise
+        uses: jdx/mise-action@v2
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            binutils-mingw-w64-x86-64 \
+            file \
+            gcc-mingw-w64-x86-64 \
+            luajit \
+            luarocks \
+            rsync \
+            wine \
+            zip
+
+      - name: Install project tools
+        run: |
+          cargo install stylua --version 2.3.1 --locked
+          mise trust
+          mise run setup-lua
+
+      - name: Read release version
+        run: |
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1)"
+          if [ -z "$version" ]; then
+            echo "lovely.toml manifest version is missing"
+            exit 1
+          fi
+          {
+            echo "RELEASE_VERSION=$version"
+            echo "RELEASE_TITLE=Brainstorm Supercharged v$version"
+            echo "PACKAGE_ZIP=Brainstorm_v$version.zip"
+          } >> "$GITHUB_ENV"
+
+      - name: Package release zip
+        run: mise run release
+
+      - name: Stage release artifacts
+        run: |
+          mkdir -p release-latest
+          cp "release/${PACKAGE_ZIP}" release-latest/
+          sha256sum "release-latest/${PACKAGE_ZIP}" > release-latest/SHA256SUMS.txt
+
+      - name: Move latest tag to this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh api \
+              -X PATCH \
+              "repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
+              -f sha="${BUILD_SHA}" \
+              -F force=true
+          else
+            gh api \
+              -X POST \
+              "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${RELEASE_TAG}" \
+              -f sha="${BUILD_SHA}"
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="$(cat <<'EOF'
+          Brainstorm Supercharged production release.
+
+          Credits: original Brainstorm by OceanRamen; rewrite by KRVH.
+
+          Install:
+          1. Download and unzip the release file that contains `Immolate.dll`.
+          2. Place all unzipped contents in `.../%appdata%/balatro/mods`.
+          3. Make sure the mod's directory name is exactly `Brainstorm`.
+          4. Reload the game to activate the mod.
+          EOF
+          )"
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --target "${BUILD_SHA}" \
+              --title "${RELEASE_TITLE}" \
+              --notes "${notes}" \
+              --latest
+            gh release upload "${RELEASE_TAG}" release-latest/* --clobber
+          else
+            gh release create "${RELEASE_TAG}" release-latest/* \
+              --target "${BUILD_SHA}" \
+              --title "${RELEASE_TITLE}" \
+              --notes "${notes}" \
+              --latest
+          fi
+
+          release_id="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" --jq .id)"
+          gh api \
+            -X PATCH \
+            "repos/${GITHUB_REPOSITORY}/releases/${release_id}" \
+            -F prerelease=false \
+            -F draft=false \
+            -f make_latest=true
