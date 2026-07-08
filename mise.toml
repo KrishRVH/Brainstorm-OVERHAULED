@@ -202,7 +202,7 @@ file "$rust_artifact" | grep -Eq 'PE32\+.*x86-64' || {
 
 exports="$(
   x86_64-w64-mingw32-objdump -p "$rust_artifact" |
-    sed -n '/^\[Ordinal\/Name Pointer\] Table$/,/^$/p' |
+    sed -n '/^\[Ordinal\/Name Pointer\] Table/,/^$/p' |
     awk '/\[[[:space:]]*[0-9]+\]/{print $NF}'
 )"
 expected="$(printf '%s\n' brainstorm_search free_result immolate_last_error immolate_set_log_path | sort)"
