@@ -155,13 +155,17 @@ helper.
 - `pack-miss`, `souls-arcana`, `perkeo`: Soul counting and legendary-pool paths.
 - `erratic`, `erratic-suit`: Erratic Deck opening-card filters.
 - `ux-*`: UI-reachable combinations derived from the Lua controls, including
-  no-pack Joker searches, Soul+Perkeo pack searches, and harder Erratic suit
-  filters.
+  duplicate tags, forced Buffoon packs, no-pack Soul/Joker searches, special
+  deck shop rates, Soul+Perkeo searches, and harder Erratic combinations.
 
 No-match/full-budget cases are the most useful for raw throughput. Early-hit
 cases are still valuable because they catch overhead, result handling, and
 short-circuit behavior. The `scan` column tells you which kind of fixture you
 are looking at.
+
+Static cases are filter combinations rejected before seed evaluation. They
+report zero scanned seeds and zero throughput/cost, and are skipped for the
+Original DLL because its ABI cannot perform the same zero-work rejection.
 
 ## TSV Output
 

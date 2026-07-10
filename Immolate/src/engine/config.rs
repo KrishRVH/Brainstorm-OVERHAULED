@@ -32,30 +32,28 @@ pub struct CompiledFilter {
     pub wants_joker_shop: bool,
     pub wants_joker_pack: bool,
     pub target_joker_pools: u8,
-    pub needs_packs: bool,
     pub selected_soulable_pack: bool,
     pub base_locks: Locks,
 }
 
 impl CompiledFilter {
     pub fn compile(raw: &FilterConfig) -> Self {
+        let mut raw = *raw;
+        if raw.erratic && !raw.no_faces && raw.suit_ratio <= 0.5 {
+            raw.suit_ratio = 0.0;
+        }
         let wants_joker = raw.joker != Item::RETRY;
         let wants_joker_shop =
             wants_joker && matches!(raw.joker_location, JokerLocation::Shop | JokerLocation::Any);
         let wants_joker_pack =
             wants_joker && matches!(raw.joker_location, JokerLocation::Pack | JokerLocation::Any);
         let target_joker_pools = target_joker_pools(raw.joker);
-        let needs_packs = raw.pack != Item::RETRY
-            || raw.observatory
-            || raw.perkeo
-            || raw.souls > 0
-            || wants_joker_pack;
         let base_locks = Locks::for_deck(raw.deck);
 
         Self {
-            raw: *raw,
+            raw,
             shape: classify(
-                raw,
+                &raw,
                 wants_joker_shop,
                 wants_joker_pack,
                 target_joker_pools,
@@ -64,7 +62,6 @@ impl CompiledFilter {
             wants_joker_shop,
             wants_joker_pack,
             target_joker_pools,
-            needs_packs,
             selected_soulable_pack: raw.pack == Item::RETRY || is_soulable_pack(raw.pack),
             base_locks,
         }
@@ -72,11 +69,45 @@ impl CompiledFilter {
 
     pub const fn chunk_size(&self) -> i64 {
         match self.shape {
-            KernelShape::Erratic => 16_384,
-            KernelShape::ShopJoker | KernelShape::PackJoker | KernelShape::AnyJoker => 32_768,
-            KernelShape::Composite => 32_768,
-            KernelShape::Generic => 262_144,
-            _ => 65_536,
+            KernelShape::Erratic => 1_024,
+            KernelShape::Composite | KernelShape::SpectralSoulPerkeo => 2_048,
+            KernelShape::ShopJoker
+            | KernelShape::PackJoker
+            | KernelShape::AnyJoker
+            | KernelShape::Souls
+            | KernelShape::Perkeo => 4_096,
+            _ => 8_192,
+        }
+    }
+
+    pub const fn serial_prefix_size(&self) -> i64 {
+        match self.shape {
+            KernelShape::Erratic | KernelShape::SpectralSoulPerkeo => 1_024,
+            KernelShape::PackJoker | KernelShape::Souls | KernelShape::TagObservatory => 8_192,
+            _ => 4_096,
+        }
+    }
+
+    pub const fn auto_thread_limit(&self) -> usize {
+        match self.shape {
+            KernelShape::Erratic => 16,
+            KernelShape::Composite if self.raw.erratic => 16,
+            KernelShape::Composite
+            | KernelShape::SpectralSoulPerkeo
+            | KernelShape::ShopJoker
+            | KernelShape::PackJoker
+            | KernelShape::AnyJoker
+            | KernelShape::Souls
+            | KernelShape::Perkeo => 8,
+            _ => 4,
+        }
+    }
+
+    pub const fn parallel_threshold(&self) -> i64 {
+        match self.shape {
+            KernelShape::Erratic => 8_192,
+            KernelShape::Composite if self.raw.erratic => 8_192,
+            _ => 32_768,
         }
     }
 }
@@ -93,7 +124,7 @@ fn classify(
     let has_pack = raw.pack != Item::RETRY;
     let has_joker = raw.joker != Item::RETRY;
     let has_souls = raw.souls > 0;
-    let has_erratic = raw.erratic;
+    let has_erratic = raw.erratic && (raw.min_face_cards > 0 || raw.suit_ratio > 0.0);
 
     if is_static_no_match(
         raw,
@@ -178,10 +209,10 @@ fn classify(
             KernelShape::PackJoker
         };
     }
+    if raw.perkeo && has_pack && is_spectral_pack(raw.pack) {
+        return KernelShape::SpectralSoulPerkeo;
+    }
     if has_souls {
-        if raw.perkeo && has_pack && is_spectral_pack(raw.pack) {
-            return KernelShape::SpectralSoulPerkeo;
-        }
         return if raw.perkeo {
             KernelShape::Composite
         } else {
@@ -230,6 +261,9 @@ fn is_static_no_match(
         if raw.pack != Item::RETRY
             && !matches!(raw.pack, Item::Buffoon_Pack | Item::Mega_Celestial_Pack)
         {
+            return true;
+        }
+        if raw.souls > 0 || raw.perkeo {
             return true;
         }
     }

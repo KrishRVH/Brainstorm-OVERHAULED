@@ -4,6 +4,7 @@ use std::process;
 use std::time::Instant;
 
 use immolate::brainstorm_search_core;
+use immolate::engine::config::{CompiledFilter, KernelShape};
 use immolate::filters::FilterConfig;
 use immolate::seed::{SEED_SPACE, Seed};
 
@@ -44,6 +45,12 @@ fn main() {
         eprintln!("{err}");
         process::exit(2);
     });
+    for case in cases.iter().copied() {
+        validate_case_shape(case).unwrap_or_else(|err| {
+            eprintln!("{err}");
+            process::exit(2);
+        });
+    }
 
     for case in cases.iter().copied() {
         let cfg = case_config(case);
@@ -62,16 +69,26 @@ fn main() {
     );
     for case in cases {
         let cfg = case_config(case);
+        let no_match = CompiledFilter::compile(&cfg).shape == KernelShape::NoMatch;
         for repeat in 1..=args.repeat {
             let started = Instant::now();
             let result = brainstorm_search_core(case.seed_start, &cfg, args.budget, args.threads);
+            if no_match && result.is_some() {
+                eprintln!("{} compiled to NoMatch but returned a seed", case.name);
+                process::exit(1);
+            }
             let elapsed = started.elapsed();
             let elapsed_secs = elapsed.as_secs_f64();
-            let scanned = scanned_count(case.seed_start, result.as_deref(), args.budget);
-            let seeds_per_sec = if elapsed_secs > 0.0 {
+            let scanned = scanned_count(no_match, case.seed_start, result.as_deref(), args.budget);
+            let seeds_per_sec = if scanned > 0 && elapsed_secs > 0.0 {
                 scanned as f64 / elapsed_secs
             } else {
-                f64::INFINITY
+                0.0
+            };
+            let ns_per_seed = if scanned > 0 {
+                elapsed_secs * 1_000_000_000.0 / scanned as f64
+            } else {
+                0.0
             };
             let result = match result.as_deref() {
                 Some("") | None => "<null>",
@@ -89,11 +106,25 @@ fn main() {
                 repeat,
                 elapsed.as_secs_f64() * 1000.0,
                 seeds_per_sec,
-                elapsed_secs * 1_000_000_000.0 / scanned as f64,
+                ns_per_seed,
                 result,
                 case.note,
             );
         }
+    }
+}
+
+fn validate_case_shape(case: bench_cases::BenchCase) -> Result<(), String> {
+    let no_match = CompiledFilter::compile(&case_config(case)).shape == KernelShape::NoMatch;
+    if (case.shape == bench_cases::BenchShape::Static) == no_match {
+        Ok(())
+    } else {
+        Err(format!(
+            "benchmark case {} has shape {}, but the filter compiler says {}",
+            case.name,
+            case.shape.label(),
+            if no_match { "static" } else { "searchable" },
+        ))
     }
 }
 
@@ -116,7 +147,10 @@ fn case_config(case: bench_cases::BenchCase) -> FilterConfig {
     )
 }
 
-fn scanned_count(seed_start: &str, result: Option<&str>, budget: i64) -> i64 {
+fn scanned_count(no_match: bool, seed_start: &str, result: Option<&str>, budget: i64) -> i64 {
+    if no_match {
+        return 0;
+    }
     let Some(result) = result else {
         return budget;
     };

@@ -469,6 +469,13 @@ Primary sources: all files listed above.
   tags. Sources: `game.lua` (`Game:update_shop`);
   `functions/UI_definitions.lua` (`create_card_for_shop`);
   `tag.lua` (`Tag:apply_to_run`).
+- Shop cards are constructed sequentially. `Card:set_ability()` immediately
+  records each created center in `G.GAME.used_jokers`, and
+  `get_current_pool()` excludes an already-used Joker unless Showman is active.
+  Consequently, later shop slots normally cannot repeat an earlier shop Joker,
+  and visible shop Jokers also constrain a Buffoon pack opened afterward.
+  Sources: `game.lua` (`Game:update_shop`); `card.lua` (`Card:init`,
+  `Card:set_ability`); `functions/common_events.lua` (`get_current_pool`).
 - `create_card_for_shop(area)` handles forced tutorial stock, tag-driven
   `store_joker_create` and `store_joker_modify`, weighted type polling by
   `joker_rate`, `tarot_rate`, `planet_rate`, `playing_card_rate`, and
@@ -531,6 +538,12 @@ Primary sources: all files listed above.
   booster marks its slot as `'USED'`. Sources: `functions/state_events.lua`
   (`new_round`); `game.lua` (`Game:update_shop`);
   `functions/button_callbacks.lua` (`G.FUNCS.use_card`).
+- Shop generation chooses booster centers but does not generate their contents.
+  `Card:open()` generates only the chosen pack's cards and advances the shared
+  content RNG keys at that time. If both shop boosters are opened, later pack
+  contents therefore depend on which pack was opened first. Sources:
+  `game.lua` (`Game:update_shop`); `functions/button_callbacks.lua`
+  (`G.FUNCS.use_card`); `card.lua` (`Card:open`).
 - Balatro defines 32 concrete booster center keys. Family names and `kind`
   drive most behavior, but exact variants matter for art/key filters and some
   unseeded tag/first-pack variant choices. Source: `game.lua` (`P_CENTERS`
@@ -774,10 +787,15 @@ Primary sources: all files listed above.
   are sorted, then `card_from_control()` creates the cards, and
   `starting_deck_size` is set to `#G.playing_cards`. Sources: `game.lua`
   (`Game:start_run`); `functions/misc_functions.lua` (`card_from_control`).
-- For optimization and seed parity, Erratic sampling is a fixed 52 draws from
-  the sorted `G.P_CARDS` key order. If `no_faces` is active, face samples are
-  discarded after sampling; they are not replaced. Source: `game.lua`
-  (`Game:start_run`).
+- For optimization and seed parity, vanilla Erratic sampling is exactly 52
+  independent draws with replacement. Because `P_CARDS` entries have no
+  `sort_id`, `pseudorandom_element()` orders their keys lexicographically:
+  Clubs, Diamonds, Hearts, then Spades, with ranks ordered
+  `2`-`9`, `A`, `J`, `K`, `Q`, `T` within each suit. If `no_faces` is active,
+  raw `J`/`Q`/`K` samples are discarded after sampling and are not replaced;
+  the later `card_protos` sort does not change counts. Sources: `game.lua`
+  (`P_CARDS`, `Game:start_run`); `functions/misc_functions.lua`
+  (`pseudorandom_element`).
 
 ## Modding Pitfalls and Practical Rules
 
@@ -825,6 +843,21 @@ Primary sources: all files listed above.
   exact concrete booster variants, scans two shop Joker slots even when source
   shop size could be larger, and treats `observatory` as a Telescope plus Mega
   Celestial availability filter.
+- Beyond its hard-coded ante, deck, and first-shop locks, native search does not
+  receive per-profile unlock/discovery state. Its static pools therefore assume
+  relevant profile gates are satisfied, while source `get_current_pool()` also
+  checks Joker/Voucher `unlocked` state and Tag `requires` discovery state.
+  Sources: `game.lua` (`Game:init_item_prototypes`); `functions/common_events.lua`
+  (`get_current_pool`); current Rust implementation.
+- Source shop generation carries `G.GAME.used_jokers` across sequential shop
+  slots and into a subsequently opened Buffoon pack. Current native Joker
+  predicates start these checks from their fixed base locks instead, and when
+  multiple eligible Buffoon packs are considered they use slot order. These are
+  historical search-model boundaries; source pack contents themselves are
+  runtime/open-order dependent. Sources: `game.lua` (`Game:update_shop`);
+  `card.lua` (`Card:set_ability`, `Card:open`);
+  `functions/common_events.lua` (`get_current_pool`); current Rust
+  implementation.
 - Observatory does not alter pack generation. The voucher's gameplay effect is
   checked when a held Planet card matches the scoring hand. Current Immolate's
   `observatory` filter is a search shortcut for "ante-1 Telescope voucher plus
@@ -839,10 +872,12 @@ Primary sources: all files listed above.
 - Native first-shop filters reject impossible requests before scanning. This
   includes ante-1 locked tags, voucher upgrades without their prerequisite
   voucher, Observatory with a non-Telescope voucher target, Observatory on
-  Nebula Deck where Telescope is already active, Soul counts above one, pack
-  Joker searches constrained to non-Buffoon packs, and Erratic requirements that
-  cannot fit a 52-card opening deck. Sources: `game.lua` (`Game:start_run`);
-  `back.lua` (`Back:apply_to_run`); `functions/common_events.lua`
+  Nebula Deck where Telescope is already active, Observatory combined with a
+  Soul or Perkeo requirement, Soul counts above one, pack Joker searches
+  constrained to non-Buffoon packs, and Erratic requirements that cannot fit a
+  52-card opening deck. Sources: `game.lua` (`Game:start_run`);
+  `back.lua` (`Back:apply_to_run`); `card.lua` (`Card:open`);
+  `functions/common_events.lua`
   (`get_current_pool`, `get_next_voucher_key`, `get_pack`, `create_card`);
   current Rust implementation.
 - Direct Joker search only targets Jokers that can appear in first-shop shop

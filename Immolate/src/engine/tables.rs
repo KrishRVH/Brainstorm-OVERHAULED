@@ -8,6 +8,7 @@ pub const POOL_UNCOMMON: u8 = 1 << 1;
 pub const POOL_RARE: u8 = 1 << 2;
 pub const POOL_LEGENDARY: u8 = 1 << 3;
 pub const STANDARD_JOKER_POOLS: u8 = POOL_COMMON | POOL_UNCOMMON | POOL_RARE;
+const LOCK_WORDS: usize = ITEM_COUNT.div_ceil(u64::BITS as usize);
 
 pub const TAG_POOL: &[Item] = &TAGS;
 pub const VOUCHER_POOL: &[Item] = &VOUCHERS;
@@ -33,15 +34,15 @@ impl ShopRates {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Locks {
-    locked: [bool; ITEM_COUNT],
+    locked: [u64; LOCK_WORDS],
 }
 
 impl Default for Locks {
     fn default() -> Self {
         let mut out = Self {
-            locked: [false; ITEM_COUNT],
+            locked: [0; LOCK_WORDS],
         };
         out.init_ante1();
         out
@@ -65,18 +66,21 @@ impl Locks {
     }
 
     pub fn is_locked(&self, item: Item) -> bool {
-        item.idx() < self.locked.len() && self.locked[item.idx()]
+        let index = item.idx();
+        index < ITEM_COUNT && self.locked[index / 64] & (1_u64 << (index % 64)) != 0
     }
 
     pub fn lock(&mut self, item: Item) {
-        if item.idx() < self.locked.len() {
-            self.locked[item.idx()] = true;
+        let index = item.idx();
+        if index < ITEM_COUNT {
+            self.locked[index / 64] |= 1_u64 << (index % 64);
         }
     }
 
     pub fn unlock(&mut self, item: Item) {
-        if item.idx() < self.locked.len() {
-            self.locked[item.idx()] = false;
+        let index = item.idx();
+        if index < ITEM_COUNT {
+            self.locked[index / 64] &= !(1_u64 << (index % 64));
         }
     }
 
@@ -176,7 +180,8 @@ pub fn target_joker_pools(target: Item) -> u8 {
 }
 
 pub fn pack_info(pack: Item) -> Pack {
-    if PACKS.iter().any(|entry| entry.item == pack) {
+    let index = pack.idx().checked_sub(Item::Arcana_Pack.idx());
+    if index.is_some_and(|index| index < PACKS.len() - 1) {
         crate::instance::pack_info(pack)
     } else {
         Pack {

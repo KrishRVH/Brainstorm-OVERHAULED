@@ -19,6 +19,7 @@ pub struct Seed {
     seed: [i16; 8],
     length: usize,
     cache: [[f64; 48]; 8],
+    cache_valid: [u64; 8],
 }
 
 impl Default for Seed {
@@ -26,7 +27,8 @@ impl Default for Seed {
         Self {
             seed: [-1; 8],
             length: 0,
-            cache: [[-1.0; 48]; 8],
+            cache: [[0.0; 48]; 8],
+            cache_valid: [0; 8],
         }
     }
 }
@@ -76,7 +78,7 @@ impl Seed {
 
         let mut i = 7_i32;
         while i >= 0 {
-            self.cache[i as usize] = [-1.0; 48];
+            self.cache_valid[i as usize] = 0;
             if self.seed[i as usize] == 34 {
                 self.seed[i as usize] = -1;
                 self.length -= 1;
@@ -98,14 +100,16 @@ impl Seed {
             return self.pseudohash_uncached(prefix_length);
         }
 
-        if self.cache[self.length - 1][cache_key] == -1.0 {
+        let cache_bit = 1_u64 << cache_key;
+        if self.cache_valid[self.length - 1] & cache_bit == 0 {
             let mut i = self.length as i32 - 2;
-            while i >= 0 && self.cache[i as usize][cache_key] == -1.0 {
+            while i >= 0 && self.cache_valid[i as usize] & cache_bit == 0 {
                 i -= 1;
             }
             if i == -1 {
                 self.cache[0][cache_key] =
                     pseudostep(self.seed_char(0), prefix_length + self.length, 1.0);
+                self.cache_valid[0] |= cache_bit;
                 i = 0;
             }
             for j in (i as usize + 1)..self.length {
@@ -114,6 +118,7 @@ impl Seed {
                     prefix_length + self.length - j,
                     self.cache[j - 1][cache_key],
                 );
+                self.cache_valid[j] |= cache_bit;
             }
         }
         self.cache[self.length - 1][cache_key]
@@ -154,5 +159,36 @@ fn char_seed(byte: u8) -> i16 {
         b'1'..=b'9' => i16::from(byte - b'1'),
         b'A'..=b'Z' => i16::from(byte - b'A' + 9),
         _ => -1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Seed;
+
+    fn assert_cache_matches_uncached(seed: &mut Seed) {
+        let last_cached_prefix = 48_usize.saturating_sub(seed.length);
+        for prefix_length in [0, 1, last_cached_prefix, last_cached_prefix + 1, 64] {
+            let expected = seed.pseudohash_uncached(prefix_length).to_bits();
+            assert_eq!(seed.pseudohash(prefix_length).to_bits(), expected);
+            assert_eq!(seed.pseudohash(prefix_length).to_bits(), expected);
+        }
+    }
+
+    #[test]
+    fn cache_validity_survives_carry_wrap_and_growth() {
+        let mut seed = Seed::from_str("ZYZZZZZZ");
+        for expected in ["ZYZZZZZZ", "ZZZZZZZ", "1ZZZZZZZ"] {
+            assert_eq!(seed.to_string(), expected);
+            assert_cache_matches_uncached(&mut seed);
+            seed.next();
+        }
+
+        let mut seed = Seed::from_str("ZZZZZZZZ");
+        for expected in ["ZZZZZZZZ", "", "1"] {
+            assert_eq!(seed.to_string(), expected);
+            assert_cache_matches_uncached(&mut seed);
+            seed.next();
+        }
     }
 }

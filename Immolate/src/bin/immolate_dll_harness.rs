@@ -26,6 +26,8 @@ mod windows_harness {
     use std::ptr;
     use std::time::{Duration, Instant};
 
+    use immolate::engine::config::{CompiledFilter, KernelShape};
+    use immolate::filters::FilterConfig;
     use immolate::seed::{SEED_SPACE, Seed};
 
     use super::bench_cases::{self as bench, BenchCase, BenchGroup, BenchShape};
@@ -120,6 +122,7 @@ mod windows_harness {
         suit_ratio: f64,
         num_seeds: i64,
         threads: i32,
+        compiled_no_match: bool,
     }
 
     struct Dll {
@@ -282,7 +285,7 @@ mod windows_harness {
                 .to_string_lossy()
                 .into_owned();
             unsafe {
-                (self.free_result)(result as *mut c_char);
+                (self.free_result)(result.cast_mut());
             }
             Ok(Some(out))
         }
@@ -741,10 +744,24 @@ mod windows_harness {
             if implementation == "original" {
                 result = normalize_legacy_original_result(case, result);
             }
+            if case.compiled_no_match && result.is_some() {
+                return Err(format!(
+                    "{} compiled to NoMatch but {implementation} returned a seed",
+                    case.name,
+                ));
+            }
             let scanned = scanned_count(case, result.as_deref());
             let elapsed_secs = elapsed.as_secs_f64();
-            let seeds_per_sec = scanned as f64 / elapsed_secs;
-            let ns_per_seed = elapsed_secs * 1_000_000_000.0 / scanned as f64;
+            let seeds_per_sec = if scanned > 0 && elapsed_secs > 0.0 {
+                scanned as f64 / elapsed_secs
+            } else {
+                0.0
+            };
+            let ns_per_seed = if scanned > 0 {
+                elapsed_secs * 1_000_000_000.0 / scanned as f64
+            } else {
+                0.0
+            };
             scanned_counts.push(scanned);
             let bench_run = BenchRun {
                 run,
@@ -768,14 +785,26 @@ mod windows_harness {
         let p95_elapsed = percentile(&durations, 0.95);
         let p99_elapsed = percentile(&durations, 0.99);
         let stdev_elapsed = stdev_duration(&durations, mean_elapsed);
-        let coefficient_variation = stdev_elapsed.as_secs_f64() / mean_elapsed.as_secs_f64();
+        let coefficient_variation = if mean_elapsed.is_zero() {
+            0.0
+        } else {
+            stdev_elapsed.as_secs_f64() / mean_elapsed.as_secs_f64()
+        };
         let mean_scanned = scanned_counts
             .iter()
             .map(|value| *value as f64)
             .sum::<f64>()
             / repeat as f64;
-        let seeds_per_sec = mean_scanned / mean_elapsed.as_secs_f64();
-        let ns_per_seed = mean_elapsed.as_secs_f64() * 1_000_000_000.0 / mean_scanned;
+        let seeds_per_sec = if mean_scanned > 0.0 && !mean_elapsed.is_zero() {
+            mean_scanned / mean_elapsed.as_secs_f64()
+        } else {
+            0.0
+        };
+        let ns_per_seed = if mean_scanned > 0.0 {
+            mean_elapsed.as_secs_f64() * 1_000_000_000.0 / mean_scanned
+        } else {
+            0.0
+        };
         let scanned_pct = mean_scanned / case.num_seeds as f64;
         let result = runs
             .last()
@@ -1012,6 +1041,9 @@ mod windows_harness {
     }
 
     fn scanned_count(case: &Case, result: Option<&str>) -> i64 {
+        if case.compiled_no_match {
+            return 0;
+        }
         let Some(result) = result else {
             return case.num_seeds;
         };
@@ -1027,6 +1059,9 @@ mod windows_harness {
     }
 
     fn original_skip_reason(case: &Case) -> Option<&'static str> {
+        if case.compiled_no_match {
+            return Some("current engine rejects this filter combination without scanning");
+        }
         if case.shape == BenchShape::Miss {
             return Some("legacy DLL has a fixed 100M scan cap, so miss cases are unbounded");
         }
@@ -1739,16 +1774,43 @@ mod windows_harness {
         budget: i64,
         threads: i32,
     ) -> Result<Vec<Case>, String> {
-        bench::selected_bench_cases(selected_case).map(|cases| {
-            cases
-                .into_iter()
-                .map(|case| case_from_bench_case(case, budget, threads))
-                .collect()
-        })
+        bench::selected_bench_cases(selected_case)?
+            .into_iter()
+            .map(|case| case_from_bench_case(case, budget, threads))
+            .collect()
     }
 
-    fn case_from_bench_case(case: BenchCase, budget: i64, threads: i32) -> Case {
-        Case {
+    fn case_from_bench_case(case: BenchCase, budget: i64, threads: i32) -> Result<Case, String> {
+        let config = FilterConfig::from_raw(
+            case.voucher,
+            case.pack,
+            case.tag1,
+            case.tag2,
+            case.joker,
+            case.joker_location,
+            case.souls,
+            case.observatory,
+            case.perkeo,
+            case.deck,
+            case.erratic,
+            case.no_faces,
+            case.min_face_cards,
+            case.suit_ratio,
+        );
+        let compiled_no_match = CompiledFilter::compile(&config).shape == KernelShape::NoMatch;
+        if (case.shape == BenchShape::Static) != compiled_no_match {
+            return Err(format!(
+                "benchmark case {} has shape {}, but the filter compiler says {}",
+                case.name,
+                case.shape.label(),
+                if compiled_no_match {
+                    "static"
+                } else {
+                    "searchable"
+                },
+            ));
+        }
+        Ok(Case {
             name: case.name,
             group: case.group,
             shape: case.shape,
@@ -1770,6 +1832,7 @@ mod windows_harness {
             suit_ratio: case.suit_ratio,
             num_seeds: budget,
             threads,
-        }
+            compiled_no_match,
+        })
     }
 }

@@ -322,14 +322,6 @@ mod tests {
 
         let cases = [
             (
-                "observatory+perkeo",
-                FilterConfig::from_raw(
-                    "", "", "", "", "", "any", 0.0, true, true, "b_red", false, false, 0, 0.0,
-                ),
-                100_000,
-                None,
-            ),
-            (
                 "souls+perkeo",
                 FilterConfig::from_raw(
                     "", "", "", "", "", "any", 1.0, false, true, "b_red", false, false, 0, 0.0,
@@ -1064,6 +1056,56 @@ mod tests {
     }
 
     #[test]
+    fn parallel_scheduler_covers_prefix_block_and_partial_tail_boundaries() {
+        let cfg = filter_config_from_benchmark(&benchmark_case("ux-soul-perkeo-spectral"));
+        let compiled = CompiledFilter::compile(&cfg);
+        let prefix = compiled.serial_prefix_size();
+        let block = compiled.chunk_size();
+        let target = "1WR71111";
+        let target_id = Seed::from_str(target).id();
+
+        for offset in [
+            prefix - 1,
+            prefix,
+            prefix + block - 1,
+            prefix + block,
+            prefix + block + 37,
+        ] {
+            let seed_start = Seed::from_id(target_id - offset).to_string();
+            let budget = offset + 1;
+            assert_eq!(
+                brainstorm_search_core(&seed_start, &cfg, budget, 1).as_deref(),
+                Some(target),
+                "test fixture has an earlier match at offset {offset}",
+            );
+            for threads in [2, 16, i32::MAX] {
+                assert_eq!(
+                    brainstorm_search_core(&seed_start, &cfg, budget, threads).as_deref(),
+                    Some(target),
+                    "scheduler lost the match at offset {offset} with {threads} threads",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scheduler_thread_inputs_preserve_the_earliest_result() {
+        let cfg = filter_config_from_benchmark(&benchmark_case("ux-soul-perkeo-spectral"));
+        let compiled = CompiledFilter::compile(&cfg);
+        let offset = compiled.serial_prefix_size() + compiled.parallel_threshold() - 1;
+        let target = "1WR71111";
+        let seed_start = Seed::from_id(Seed::from_str(target).id() - offset).to_string();
+
+        for threads in [i32::MIN, -1, 0, 1, 2, 16, i32::MAX] {
+            assert_eq!(
+                brainstorm_search_core(&seed_start, &cfg, offset + 1, threads).as_deref(),
+                Some(target),
+                "scheduler changed the earliest result for thread input {threads}",
+            );
+        }
+    }
+
+    #[test]
     fn current_core_matches_source_oracle_for_every_ux_benchmark_case() {
         for case in crate::bench_cases::bench_cases()
             .into_iter()
@@ -1071,6 +1113,47 @@ mod tests {
         {
             let cfg = filter_config_from_benchmark(&case);
             assert_core_matches_source_oracle(case.name, case.seed_start, &cfg, 100_000);
+        }
+    }
+
+    #[test]
+    fn benchmark_static_shapes_match_filter_compiler() {
+        use crate::bench_cases::BenchShape;
+        use crate::engine::config::KernelShape;
+
+        for case in crate::bench_cases::bench_cases() {
+            let compiled = CompiledFilter::compile(&filter_config_from_benchmark(&case));
+            assert_eq!(
+                case.shape == BenchShape::Static,
+                compiled.shape == KernelShape::NoMatch,
+                "benchmark case {} has a stale shape label",
+                case.name,
+            );
+        }
+    }
+
+    #[test]
+    fn optimized_predicates_match_source_oracle_across_ux_windows() {
+        for case in crate::bench_cases::bench_cases()
+            .into_iter()
+            .filter(|case| case.group == crate::bench_cases::BenchGroup::Ux)
+        {
+            let cfg = filter_config_from_benchmark(&case);
+            let compiled = CompiledFilter::compile(&cfg);
+            for seed_start in ["", "KRVH1234", "ZZZYZZZZ"] {
+                let mut state = SearchState::from_id(Seed::from_str(seed_start).id());
+                for offset in 0..256 {
+                    let mut instance = Instance::new(state.seed.clone());
+                    let expected = crate::filters::apply_filters(&mut instance, &cfg);
+                    let actual = apply_compiled_filter(&mut state, &compiled);
+                    assert_eq!(
+                        actual, expected,
+                        "{} diverged from the source model at {} + {offset}",
+                        case.name, seed_start,
+                    );
+                    state.next();
+                }
+            }
         }
     }
 
@@ -1248,6 +1331,18 @@ mod tests {
                     false,
                     0,
                     0.0,
+                ),
+            ),
+            (
+                "observatory with Soul count",
+                FilterConfig::from_raw(
+                    "", "", "", "", "", "any", 1.0, true, false, "b_red", false, false, 0, 0.0,
+                ),
+            ),
+            (
+                "observatory with Perkeo",
+                FilterConfig::from_raw(
+                    "", "", "", "", "", "any", 0.0, true, true, "b_red", false, false, 0, 0.0,
                 ),
             ),
             (
@@ -1444,6 +1539,19 @@ mod tests {
             resolve_seed_budget(crate::seed::SEED_SPACE + 1),
             crate::seed::SEED_SPACE
         );
+    }
+
+    #[test]
+    fn filtered_parallel_search_preserves_earliest_seed_across_wraparound() {
+        let cfg = filter_config_from_benchmark(&benchmark_case("ux-soul-perkeo-spectral"));
+        let expected = Some("1WR71111".to_owned());
+        for threads in [1, 2, 4, 8, 16, 0] {
+            assert_eq!(
+                brainstorm_search_core("ZZZZZZZZ", &cfg, 310_000, threads),
+                expected,
+                "wraparound search changed its earliest result with {threads} threads",
+            );
+        }
     }
 
     #[test]

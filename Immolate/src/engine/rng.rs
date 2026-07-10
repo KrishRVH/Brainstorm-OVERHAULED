@@ -1,7 +1,7 @@
 use crate::rng::{LuaRandom, fract, pseudohash_from_bytes, round13};
 use crate::seed::Seed;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RngKey {
     Tag1,
     Voucher1,
@@ -58,12 +58,14 @@ impl RngKey {
 pub struct RngState {
     nodes: [f64; KEY_COUNT],
     initialized_mask: u32,
-    dynamic_nodes: Vec<DynamicNode>,
+    resample_nodes: Vec<ResampleNode>,
+    active_resample_nodes: usize,
 }
 
-#[derive(Clone, Debug)]
-struct DynamicNode {
-    key: String,
+#[derive(Clone, Copy, Debug)]
+struct ResampleNode {
+    key: RngKey,
+    resample: u16,
     value: f64,
 }
 
@@ -72,7 +74,8 @@ impl Default for RngState {
         Self {
             nodes: [0.0; KEY_COUNT],
             initialized_mask: 0,
-            dynamic_nodes: Vec::with_capacity(8),
+            resample_nodes: Vec::new(),
+            active_resample_nodes: 0,
         }
     }
 }
@@ -80,7 +83,7 @@ impl Default for RngState {
 impl RngState {
     pub fn clear(&mut self) {
         self.initialized_mask = 0;
-        self.dynamic_nodes.clear();
+        self.active_resample_nodes = 0;
     }
 
     pub fn random(&mut self, key: RngKey, seed: &mut Seed, hashed_seed: f64) -> f64 {
@@ -100,15 +103,16 @@ impl RngState {
         LuaRandom::new(node).randint(min, max)
     }
 
-    pub fn randint_dynamic(
+    pub fn randint_resample(
         &mut self,
-        key: &str,
+        key: RngKey,
+        resample: u16,
         seed: &mut Seed,
         hashed_seed: f64,
         min: i32,
         max: i32,
     ) -> i32 {
-        let node = self.get_dynamic_node(key, seed, hashed_seed);
+        let node = self.get_resample_node(key, resample, seed, hashed_seed);
         LuaRandom::new(node).randint(min, max)
     }
 
@@ -123,18 +127,36 @@ impl RngState {
         advance_node(node, hashed_seed)
     }
 
-    fn get_dynamic_node(&mut self, key: &str, seed: &mut Seed, hashed_seed: f64) -> f64 {
-        let position = self.dynamic_nodes.iter().position(|node| node.key == key);
+    fn get_resample_node(
+        &mut self,
+        key: RngKey,
+        resample: u16,
+        seed: &mut Seed,
+        hashed_seed: f64,
+    ) -> f64 {
+        let position = self.resample_nodes[..self.active_resample_nodes]
+            .iter()
+            .position(|node| node.key == key && node.resample == resample);
         let value = if let Some(position) = position {
-            &mut self.dynamic_nodes[position].value
+            &mut self.resample_nodes[position].value
         } else {
-            let value = initial_node(seed, key.as_bytes());
-            let position = self.dynamic_nodes.len();
-            self.dynamic_nodes.push(DynamicNode {
-                key: key.to_owned(),
-                value,
-            });
-            &mut self.dynamic_nodes[position].value
+            let value = initial_resample_node(seed, key, resample);
+            let position = self.active_resample_nodes;
+            self.active_resample_nodes += 1;
+            if position == self.resample_nodes.len() {
+                self.resample_nodes.push(ResampleNode {
+                    key,
+                    resample,
+                    value,
+                });
+            } else {
+                self.resample_nodes[position] = ResampleNode {
+                    key,
+                    resample,
+                    value,
+                };
+            }
+            &mut self.resample_nodes[position].value
         };
         advance_node(value, hashed_seed)
     }
@@ -143,6 +165,35 @@ impl RngState {
 fn initial_node(seed: &mut Seed, key: &[u8]) -> f64 {
     let seed_hash = seed.pseudohash(key.len());
     pseudohash_from_bytes(key, seed_hash)
+}
+
+fn initial_resample_node(seed: &mut Seed, key: RngKey, resample: u16) -> f64 {
+    const SUFFIX: &[u8] = b"_resample";
+
+    let base = key.name().as_bytes();
+    let mut bytes = [0_u8; 40];
+    bytes[..base.len()].copy_from_slice(base);
+    let mut len = base.len();
+    bytes[len..len + SUFFIX.len()].copy_from_slice(SUFFIX);
+    len += SUFFIX.len();
+
+    let mut digits = [0_u8; 5];
+    let mut digit_count = 0;
+    let mut value = resample;
+    loop {
+        digits[digit_count] = b'0' + (value % 10) as u8;
+        digit_count += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    for digit in digits[..digit_count].iter().rev() {
+        bytes[len] = *digit;
+        len += 1;
+    }
+
+    initial_node(seed, &bytes[..len])
 }
 
 fn advance_node(node: &mut f64, hashed_seed: f64) -> f64 {

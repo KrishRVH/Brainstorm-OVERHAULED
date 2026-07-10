@@ -39,14 +39,19 @@ fn generic_fallback(state: &SearchState, cfg: &CompiledFilter) -> bool {
 
 fn tag_only(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     let small = randchoice_tag(state);
-    let big = randchoice_tag(state);
     match (cfg.raw.tag1, cfg.raw.tag2) {
         (Item::RETRY, Item::RETRY) => true,
-        (Item::RETRY, tag) | (tag, Item::RETRY) => small == tag || big == tag,
+        (Item::RETRY, tag) | (tag, Item::RETRY) => small == tag || randchoice_tag(state) == tag,
         (tag1, tag2) if tag1 != tag2 => {
-            (small == tag1 || big == tag1) && (small == tag2 || big == tag2)
+            if small == tag1 {
+                randchoice_tag(state) == tag2
+            } else if small == tag2 {
+                randchoice_tag(state) == tag1
+            } else {
+                false
+            }
         },
-        (tag, _) => small == tag && big == tag,
+        (tag, _) => small == tag && randchoice_tag(state) == tag,
     }
 }
 
@@ -55,14 +60,17 @@ fn voucher_only(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
 }
 
 fn pack_only(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
-    cfg.raw.pack == Item::Buffoon_Pack || roll_second_pack(state) == cfg.raw.pack
+    cfg.raw.pack == Item::Buffoon_Pack || second_pack_is(state, cfg.raw.pack)
 }
 
 fn observatory(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
+    if !second_pack_is(state, Item::Mega_Celestial_Pack) {
+        return false;
+    }
     if next_voucher(state, &cfg.base_locks) != Item::Telescope {
         return false;
     }
-    roll_second_pack(state) == Item::Mega_Celestial_Pack
+    true
 }
 
 fn tag_observatory(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
@@ -92,30 +100,62 @@ fn pack_joker(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     if cfg.target_joker_pools & STANDARD_JOKER_POOLS == 0 {
         return false;
     }
-    let packs = pack_slots(state, cfg.needs_packs);
-    packs.into_iter().any(|pack| {
-        pack_matches_filter(pack, cfg.raw.pack)
-            && is_buffoon_pack(pack)
+
+    if cfg.raw.pack == Item::RETRY || cfg.raw.pack == Item::Buffoon_Pack {
+        if buffoon_pack_has_joker(
+            state,
+            Item::Buffoon_Pack,
+            cfg.raw.joker,
+            cfg.target_joker_pools,
+            &cfg.base_locks,
+        ) {
+            return true;
+        }
+
+        let second_pack = roll_second_pack(state);
+        if cfg.raw.pack == Item::Buffoon_Pack && second_pack != Item::Buffoon_Pack {
+            return false;
+        }
+        return is_buffoon_pack(second_pack)
             && buffoon_pack_has_joker(
                 state,
-                pack,
+                second_pack,
                 cfg.raw.joker,
                 cfg.target_joker_pools,
                 &cfg.base_locks,
-            )
-    })
+            );
+    }
+
+    if !second_pack_is(state, cfg.raw.pack) {
+        return false;
+    }
+    buffoon_pack_has_joker(
+        state,
+        cfg.raw.pack,
+        cfg.raw.joker,
+        cfg.target_joker_pools,
+        &cfg.base_locks,
+    )
 }
 
 fn any_joker(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
-    let packs = if cfg.raw.pack == Item::RETRY {
-        [Item::RETRY; 2]
-    } else {
-        let packs = pack_slots(state, cfg.needs_packs);
-        if !packs.contains(&cfg.raw.pack) {
+    if cfg.raw.pack != Item::RETRY && cfg.raw.pack != Item::Buffoon_Pack {
+        if !second_pack_is(state, cfg.raw.pack) {
             return false;
         }
-        packs
-    };
+        if cfg.wants_joker_shop && shop_joker(state, cfg) {
+            return true;
+        }
+        return cfg.wants_joker_pack
+            && is_buffoon_pack(cfg.raw.pack)
+            && buffoon_pack_has_joker(
+                state,
+                cfg.raw.pack,
+                cfg.raw.joker,
+                cfg.target_joker_pools,
+                &cfg.base_locks,
+            );
+    }
 
     if cfg.wants_joker_shop && shop_joker(state, cfg) {
         return true;
@@ -123,52 +163,40 @@ fn any_joker(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     if !cfg.wants_joker_pack {
         return false;
     }
-    if cfg.raw.pack == Item::RETRY {
-        return pack_joker(state, cfg);
-    }
-    packs.into_iter().any(|pack| {
-        pack_matches_filter(pack, cfg.raw.pack)
-            && is_buffoon_pack(pack)
-            && buffoon_pack_has_joker(
-                state,
-                pack,
-                cfg.raw.joker,
-                cfg.target_joker_pools,
-                &cfg.base_locks,
-            )
-    })
+    pack_joker(state, cfg)
 }
 
 fn souls(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     if !cfg.selected_soulable_pack {
         return false;
     }
-    let packs = pack_slots(state, cfg.needs_packs);
-    for pack in packs {
-        if !pack_matches_filter(pack, cfg.raw.pack) || !is_soulable_pack(pack) {
-            continue;
+    let pack = if cfg.raw.pack == Item::RETRY {
+        roll_second_pack(state)
+    } else {
+        if !second_pack_is(state, cfg.raw.pack) {
+            return false;
         }
-        if pack_contains_soul(state, pack, &cfg.base_locks) {
-            return true;
-        }
+        cfg.raw.pack
+    };
+    if !is_soulable_pack(pack) {
+        return false;
     }
-    false
+    pack_contains_soul(state, pack, &cfg.base_locks)
 }
 
 fn perkeo(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
-    let packs = pack_slots(state, cfg.needs_packs);
-    for pack in packs {
-        if !pack_matches_filter(pack, cfg.raw.pack) || !is_soulable_pack(pack) {
-            continue;
+    let pack = if cfg.raw.pack == Item::RETRY {
+        roll_second_pack(state)
+    } else {
+        if !second_pack_is(state, cfg.raw.pack) {
+            return false;
         }
-        if !pack_contains_soul(state, pack, &cfg.base_locks) {
-            continue;
-        }
-        if pack_info(pack).choices > 0 && soul_yields_perkeo(state, &cfg.base_locks) {
-            return true;
-        }
+        cfg.raw.pack
+    };
+    if !is_soulable_pack(pack) || !pack_contains_soul(state, pack, &cfg.base_locks) {
+        return false;
     }
-    false
+    soul_yields_perkeo(state, &cfg.base_locks)
 }
 
 fn spectral_soul_perkeo(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
@@ -190,6 +218,12 @@ fn erratic(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     }
     if cfg.raw.no_faces && cfg.raw.min_face_cards > 0 {
         return false;
+    }
+    if cfg.raw.suit_ratio <= 0.0 {
+        return erratic_faces_only(state, cfg.raw.min_face_cards);
+    }
+    if !cfg.raw.no_faces && cfg.raw.min_face_cards <= 0 {
+        return erratic_suits_only(state, cfg.raw.suit_ratio);
     }
 
     let mut total = 0_i32;
@@ -216,14 +250,40 @@ fn erratic(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
         if suit < suit_count.len() {
             suit_count[suit] += 1;
         }
+        if cfg.raw.no_faces && cfg.raw.suit_ratio <= 0.5 {
+            return true;
+        }
         let remaining = 51 - drawn;
         if cfg.raw.min_face_cards > 0 && face_count + remaining < cfg.raw.min_face_cards {
             return false;
         }
-        if fixed_total_suit_requirement > 0
-            && top_two_suit_count(suit_count) + remaining < fixed_total_suit_requirement
-        {
-            return false;
+        if cfg.raw.suit_ratio <= 0.0 && face_count >= cfg.raw.min_face_cards {
+            return true;
+        }
+
+        if cfg.raw.suit_ratio > 0.0 {
+            let top_two = top_two_suit_count(suit_count);
+            if fixed_total_suit_requirement > 0 {
+                if top_two + remaining < fixed_total_suit_requirement {
+                    return false;
+                }
+                if top_two >= fixed_total_suit_requirement && face_count >= cfg.raw.min_face_cards {
+                    return true;
+                }
+            } else {
+                let maximum_total = total + remaining;
+                if maximum_total > 0
+                    && f64::from(top_two + remaining) / f64::from(maximum_total)
+                        < cfg.raw.suit_ratio
+                {
+                    return false;
+                }
+                if maximum_total > 0
+                    && f64::from(top_two) / f64::from(maximum_total) >= cfg.raw.suit_ratio
+                {
+                    return true;
+                }
+            }
         }
     }
 
@@ -237,6 +297,46 @@ fn erratic(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
         return f64::from(top_two_suit_count(suit_count)) / f64::from(total) >= cfg.raw.suit_ratio;
     }
     true
+}
+
+fn erratic_faces_only(state: &mut SearchState, required_faces: i32) -> bool {
+    let mut face_count = 0_i32;
+    for drawn in 0..52 {
+        let index = state
+            .rng
+            .randint(RngKey::Erratic, &mut state.seed, state.hashed_seed, 0, 51)
+            as usize;
+        if matches!(index, 9..=11 | 22..=24 | 35..=37 | 48..=50) {
+            face_count += 1;
+            if face_count >= required_faces {
+                return true;
+            }
+        }
+        if face_count + 51 - drawn < required_faces {
+            return false;
+        }
+    }
+    false
+}
+
+fn erratic_suits_only(state: &mut SearchState, suit_ratio: f64) -> bool {
+    let required_cards = (suit_ratio * 52.0).ceil() as i32;
+    let mut suit_count = [0_i32; 4];
+    for drawn in 0..52 {
+        let index = state
+            .rng
+            .randint(RngKey::Erratic, &mut state.seed, state.hashed_seed, 0, 51)
+            as usize;
+        suit_count[index / 13] += 1;
+        let top_two = top_two_suit_count(suit_count);
+        if top_two >= required_cards {
+            return true;
+        }
+        if top_two + 51 - drawn < required_cards {
+            return false;
+        }
+    }
+    false
 }
 
 fn top_two_suit_count(suit_count: [i32; 4]) -> i32 {
@@ -254,8 +354,28 @@ fn top_two_suit_count(suit_count: [i32; 4]) -> i32 {
 }
 
 fn composite(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
-    if (cfg.raw.tag1 != Item::RETRY || cfg.raw.tag2 != Item::RETRY) && !tag_only(state, cfg) {
-        return false;
+    let mut packs = [Item::Buffoon_Pack, Item::RETRY];
+    let selective_pack = if cfg.raw.observatory {
+        Item::Mega_Celestial_Pack
+    } else if cfg.raw.pack != Item::RETRY && cfg.raw.pack != Item::Buffoon_Pack {
+        cfg.raw.pack
+    } else {
+        Item::RETRY
+    };
+    if selective_pack != Item::RETRY {
+        if !second_pack_is(state, selective_pack) {
+            return false;
+        }
+        packs[1] = selective_pack;
+    }
+
+    let mut souls_checked_early = false;
+    if cfg.raw.pack == Item::RETRY && (cfg.raw.souls > 0 || cfg.raw.perkeo) {
+        packs[1] = roll_second_pack(state);
+        if !composite_has_souls_and_perkeo(state, cfg, packs) {
+            return false;
+        }
+        souls_checked_early = true;
     }
 
     let mut first_voucher = Item::RETRY;
@@ -266,9 +386,12 @@ fn composite(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
         }
     }
 
-    let packs = pack_slots(state, cfg.needs_packs);
-    if cfg.raw.pack != Item::RETRY && !packs.contains(&cfg.raw.pack) {
+    if (cfg.raw.tag1 != Item::RETRY || cfg.raw.tag2 != Item::RETRY) && !tag_only(state, cfg) {
         return false;
+    }
+
+    if packs[1] == Item::RETRY && (cfg.wants_joker_pack || cfg.raw.souls > 0 || cfg.raw.perkeo) {
+        packs[1] = roll_second_pack(state);
     }
 
     if cfg.raw.observatory {
@@ -284,7 +407,10 @@ fn composite(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
         return false;
     }
 
-    if (cfg.raw.souls > 0 || cfg.raw.perkeo) && !composite_has_souls_and_perkeo(state, cfg, packs) {
+    if !souls_checked_early
+        && (cfg.raw.souls > 0 || cfg.raw.perkeo)
+        && !composite_has_souls_and_perkeo(state, cfg, packs)
+    {
         return false;
     }
 
@@ -337,10 +463,7 @@ fn composite_has_souls_and_perkeo(
         }
         soul_found = true;
 
-        if cfg.raw.perkeo
-            && pack_info(pack).choices > 0
-            && soul_yields_perkeo(state, &cfg.base_locks)
-        {
+        if cfg.raw.perkeo && soul_yields_perkeo(state, &cfg.base_locks) {
             perkeo_found = true;
         }
         if soul_found && perkeo_found {
@@ -349,14 +472,6 @@ fn composite_has_souls_and_perkeo(
     }
 
     soul_found && perkeo_found
-}
-
-fn pack_slots(state: &mut SearchState, needed: bool) -> [Item; 2] {
-    if needed {
-        [Item::Buffoon_Pack, roll_second_pack(state)]
-    } else {
-        [Item::RETRY; 2]
-    }
 }
 
 fn pack_matches_filter(pack: Item, selected_pack: Item) -> bool {
@@ -377,7 +492,18 @@ fn second_pack_is(state: &mut SearchState, target: Item) -> bool {
         .random(RngKey::ShopPack1, &mut state.seed, state.hashed_seed)
         * weighted_packs()[0].weight;
     match target {
+        Item::Arcana_Pack => poll <= 4.0,
+        Item::Jumbo_Arcana_Pack => poll > 4.0 && poll <= 6.0,
+        Item::Mega_Arcana_Pack => poll > 6.0 && poll <= 6.5,
+        Item::Celestial_Pack => poll > 6.5 && poll <= 10.5,
+        Item::Jumbo_Celestial_Pack => poll > 10.5 && poll <= 12.5,
         Item::Mega_Celestial_Pack => poll > 12.5 && poll <= 13.0,
+        Item::Standard_Pack => poll > 13.0 && poll <= 17.0,
+        Item::Jumbo_Standard_Pack => poll > 17.0 && poll <= 19.0,
+        Item::Mega_Standard_Pack => poll > 19.0 && poll <= 19.5,
+        Item::Buffoon_Pack => poll > 19.5 && poll <= 20.7,
+        Item::Jumbo_Buffoon_Pack => poll > 20.7 && poll <= 21.3,
+        Item::Mega_Buffoon_Pack => poll > 21.3 && poll <= 21.45,
         Item::Spectral_Pack => poll > 21.45 && poll <= 22.05,
         Item::Jumbo_Spectral_Pack => poll > 22.05 && poll <= 22.35,
         Item::Mega_Spectral_Pack => poll > 22.35 && poll <= 22.42,
@@ -433,7 +559,7 @@ fn buffoon_pack_has_joker(
     base_locks: &Locks,
 ) -> bool {
     let info = pack_info(pack);
-    let mut locks = base_locks.clone();
+    let mut locks = *base_locks;
     for _ in 0..info.size {
         let joker = next_joker_item(state, JokerSource::Buffoon, target_pools, &locks);
         if joker == target {
@@ -446,23 +572,17 @@ fn buffoon_pack_has_joker(
 
 fn pack_contains_soul(state: &mut SearchState, pack: Item, base_locks: &Locks) -> bool {
     let info = pack_info(pack);
-    let mut locks = base_locks.clone();
-    for _ in 0..info.size {
-        let item = if is_arcana_pack(pack) {
-            next_tarot_soul_candidate(state, &locks)
-        } else if is_spectral_pack(pack) {
-            next_spectral_soul_candidate(state, &locks)
-        } else {
-            Item::RETRY
-        };
-        if item == Item::The_Soul {
-            return true;
-        }
-        if item != Item::RETRY {
-            locks.lock(item);
-        }
+    if is_spectral_pack(pack) {
+        return spectral_pack_contains_soul(state, info.size, base_locks);
     }
-    false
+    is_arcana_pack(pack)
+        && !base_locks.is_locked(Item::The_Soul)
+        && (0..info.size).any(|_| {
+            state
+                .rng
+                .random(RngKey::SoulTarot1, &mut state.seed, state.hashed_seed)
+                > 0.997
+        })
 }
 
 fn spectral_pack_contains_soul(state: &mut SearchState, size: usize, locks: &Locks) -> bool {
@@ -493,39 +613,6 @@ fn spectral_pack_contains_soul(state: &mut SearchState, size: usize, locks: &Loc
         }
     }
     false
-}
-
-fn next_tarot_soul_candidate(state: &mut SearchState, locks: &Locks) -> Item {
-    if !locks.is_locked(Item::The_Soul)
-        && state
-            .rng
-            .random(RngKey::SoulTarot1, &mut state.seed, state.hashed_seed)
-            > 0.997
-    {
-        return Item::The_Soul;
-    }
-    Item::RETRY
-}
-
-fn next_spectral_soul_candidate(state: &mut SearchState, locks: &Locks) -> Item {
-    let mut forced = Item::RETRY;
-    if !locks.is_locked(Item::The_Soul)
-        && state
-            .rng
-            .random(RngKey::SoulSpectral1, &mut state.seed, state.hashed_seed)
-            > 0.997
-    {
-        forced = Item::The_Soul;
-    }
-    if !locks.is_locked(Item::Black_Hole)
-        && state
-            .rng
-            .random(RngKey::SoulSpectral1, &mut state.seed, state.hashed_seed)
-            > 0.997
-    {
-        forced = Item::Black_Hole;
-    }
-    forced
 }
 
 fn soul_yields_perkeo(state: &mut SearchState, locks: &Locks) -> bool {
@@ -607,12 +694,11 @@ fn randchoice(state: &mut SearchState, key: RngKey, items: &[Item], locks: &Lock
         return item;
     }
 
-    let base = key.name();
-    let mut resample = 2;
+    let mut resample = 2_u16;
     loop {
-        let resample_key = format!("{base}_resample{resample}");
-        let idx = state.rng.randint_dynamic(
-            &resample_key,
+        let idx = state.rng.randint_resample(
+            key,
+            resample,
             &mut state.seed,
             state.hashed_seed,
             0,
@@ -639,11 +725,11 @@ fn randchoice_tag(state: &mut SearchState) -> Item {
         return item;
     }
 
-    let mut resample = 2;
+    let mut resample = 2_u16;
     loop {
-        let resample_key = format!("Tag1_resample{resample}");
-        let idx = state.rng.randint_dynamic(
-            &resample_key,
+        let idx = state.rng.randint_resample(
+            RngKey::Tag1,
+            resample,
             &mut state.seed,
             state.hashed_seed,
             0,
@@ -653,6 +739,29 @@ fn randchoice_tag(state: &mut SearchState) -> Item {
         resample += 1;
         if !is_ante1_locked_tag(candidate) || resample > 1000 {
             return candidate;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{roll_second_pack, second_pack_is, weighted_packs};
+    use crate::engine::seed::SearchState;
+
+    #[test]
+    fn direct_second_pack_intervals_match_weighted_rolls() {
+        for seed_id in 0..4_096 {
+            let state = SearchState::from_id(seed_id);
+            let mut rolled = state.clone();
+            let expected = roll_second_pack(&mut rolled);
+            for entry in &weighted_packs()[1..] {
+                let mut direct = state.clone();
+                assert_eq!(
+                    second_pack_is(&mut direct, entry.item),
+                    entry.item == expected,
+                    "pack interval mismatch for seed id {seed_id}",
+                );
+            }
         }
     }
 }
