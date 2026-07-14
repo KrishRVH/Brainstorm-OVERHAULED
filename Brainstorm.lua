@@ -1,6 +1,6 @@
 -- Brainstorm Mod for Balatro
 -- High-performance seed filtering and save state management
--- Created by OceanRamen. Rewrite by KRVH. Immolate DLL by MathIsFun0.
+-- Full rewrite by KRVH. Originals: Brainstorm by OceanRamen; Immolate by MathIsFun0.
 -- License: CC BY-NC-SA 4.0
 -- Entry point loaded by lovely.toml; initializes config, UI, and game hooks.
 

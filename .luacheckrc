@@ -1,46 +1,43 @@
--- Luacheck configuration for Brainstorm mod
--- Production-ready settings with strict standards
-
 -- Balatro globals
 globals = {
+    "Brainstorm",
     "G",
     "SMODS",
-    "Brainstorm",
     "STR_PACK",
     "STR_UNPACK",
-    "pseudoseed",
-    "pseudorandom",
-    "pseudorandom_element",
-    "compress_and_save",
-    "get_compressed",
-    "sendDebugMessage",
-    "nfs",
-    "lovely",
-    "random_string",
-    "number_format",
-    "Event",
-    "attention_text",
-    "play_sound",
     "Controller",
-    "Game",
-    "copy_table",
-    "lighten",
-    "darken",
-    "UIBox",
     "DynaText",
+    "Event",
+    "Game",
     "Particles",
+    "UIBox",
+    "UIBox_button",
+    "attention_text",
+    "compress_and_save",
+    "copy_table",
     "create_option_cycle",
     "create_text_input",
-    "UIBox_button",
-    "create_toggle"
+    "create_toggle",
+    "darken",
+    "get_compressed",
+    "lighten",
+    "lovely",
+    "nfs",
+    "number_format",
+    "play_sound",
+    "pseudorandom",
+    "pseudorandom_element",
+    "pseudoseed",
+    "random_string",
+    "sendDebugMessage"
 }
 
 -- Standard library extensions and LuaJIT FFI
 read_globals = {
-    "love",
-    "ffi",
     "bit",
-    "jit"
+    "ffi",
+    "jit",
+    "love"
 }
 
 -- Performance: cache all globals
@@ -66,17 +63,9 @@ unused_args = false
 unused_secondaries = false
 self = false
 
--- Exclude external libraries
+-- Exclude the untracked game source.
 exclude_files = {
-    "BalatroSource/**",
-    "tests/**",
-    "*.min.lua"
-}
-
--- Module-specific overrides
-files["Core/logger.lua"] = {
-    -- Logger can have longer lines for formatted output
-    max_line_length = 150
+    "BalatroSource/**"
 }
 
 files["UI.lua"] = {

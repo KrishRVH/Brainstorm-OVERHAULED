@@ -6,12 +6,12 @@
 *.rs text
 
 # Config and project metadata
-*.toml text
-*.yml text
-*.yaml text
 *.lock text
-.gitignore text
+*.toml text
+*.yaml text
+*.yml text
 .gitattributes text
+.gitignore text
 .luacheckrc text
 
 # Docs

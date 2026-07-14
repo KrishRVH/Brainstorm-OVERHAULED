@@ -1,13 +1,13 @@
 [manifest]
-version = "3.1"
+version = "3.2"
 dump_lua = true
 priority = 0
 
 [[patches]]
 [patches.module]
+name = 'nativefs'
 source = 'nativefs.lua'
 before = 'main.lua'
-name = 'nativefs'
 
 [[patches]]
 [patches.copy]

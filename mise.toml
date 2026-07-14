@@ -93,6 +93,9 @@ run = '''
 set -euo pipefail
 version_number="$(sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1)"
 compat_version="$(sed -n 's/^--- VERSION:[[:space:]]*//p' steamodded_compat.lua | head -n1)"
+cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$IMMO_DIR/Cargo.toml" | head -n1)"
+cargo_lock_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$IMMO_DIR/Cargo.lock" | head -n1)"
+readme_version="$(sed -n 's/^Current release: \*\*v\([^*]*\)\*\*\.$/\1/p' README.md | head -n1)"
 
 [ -n "$version_number" ] || {
   echo "lovely.toml manifest version is missing"
@@ -102,29 +105,42 @@ compat_version="$(sed -n 's/^--- VERSION:[[:space:]]*//p' steamodded_compat.lua 
   echo "steamodded_compat.lua VERSION is $compat_version but lovely.toml is $version_number"
   exit 1
 }
+[ "$cargo_version" = "$version_number.0" ] || {
+  echo "$IMMO_DIR/Cargo.toml version is $cargo_version but lovely.toml is $version_number"
+  exit 1
+}
+[ "$cargo_lock_version" = "$cargo_version" ] || {
+  echo "$IMMO_DIR/Cargo.lock version is $cargo_lock_version but $IMMO_DIR/Cargo.toml is $cargo_version"
+  exit 1
+}
+[ "$readme_version" = "$version_number" ] || {
+  echo "README.md current release is $readme_version but lovely.toml is $version_number"
+  exit 1
+}
 
 echo "version ok: $version_number"
 '''
 
 [tasks.bump-version]
-description = "Update lovely.toml and Steamodded metadata together. Usage: VERSION=3.2 mise run bump-version"
+description = "Synchronize release version metadata. Usage: VERSION=<VERSION> mise run bump-version"
 shell = "bash -c"
 run = '''
 set -euo pipefail
 new_version="${VERSION:-}"
 if [ -z "$new_version" ]; then
-  echo "Set VERSION, for example: VERSION=3.2 mise run bump-version"
+  echo "Set VERSION, for example: VERSION=3.3 mise run bump-version"
   exit 1
 fi
-case "$new_version" in
-  *[!0-9A-Za-z.+_-]*|'')
-    echo "Invalid VERSION: $new_version"
-    exit 1
-    ;;
-esac
+if ! printf '%s\n' "$new_version" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+  echo "Invalid VERSION: $new_version (expected MAJOR.MINOR)"
+  exit 1
+fi
 
 sed -i -E "0,/^version = \".*\"/s//version = \"$new_version\"/" lovely.toml
 sed -i -E "s/^(--- VERSION:[[:space:]]*).*/\\1$new_version/" steamodded_compat.lua
+sed -i -E "0,/^version = \".*\"/s//version = \"$new_version.0\"/" "$IMMO_DIR/Cargo.toml"
+sed -i -E "0,/^version = \".*\"/s//version = \"$new_version.0\"/" "$IMMO_DIR/Cargo.lock"
+sed -i -E "s/^(Current release: \\*\\*v)[^*]+(\\*\\*\\.)$/\\1$new_version\\2/" README.md
 mise run check-version
 '''
 

@@ -4,9 +4,10 @@ Brainstorm is a Balatro mod with Lua UI/hooks and a native Rust DLL named
 Immolate. Keep agent work source-faithful, scoped, and validated.
 
 ## Non-Negotiables
-- Credits must stay intact: Brainstorm by OceanRamen, fork/rewrite by KRVH,
-  Immolate by MathIsFun0. Steamodded metadata and shipped notices must credit
-  OceanRamen and KRVH.
+
+- Credits must stay intact: full rewrite by KRVH; original Brainstorm by
+  OceanRamen; original Immolate by MathIsFun0. Steamodded metadata and shipped
+  notices must credit OceanRamen and KRVH.
 - `BalatroSource/` is the literal game source. Never commit it. Use it as the
   source of truth for game mechanics.
 - `BalatroSource_Guide.md` is the verified map of source mechanics; update it
@@ -18,17 +19,21 @@ Immolate. Keep agent work source-faithful, scoped, and validated.
 - Do not commit `release/` payloads or generated zips.
 
 ## Project Map
+
 - Lua entry/UI: `Brainstorm.lua`, `UI.lua`.
 - Mod metadata/compat: `lovely.toml`, `steamodded_compat.lua`, `nativefs.lua`.
 - Rust crate: `Immolate/`; implementation in `Immolate/src/`.
 - Benchmark catalog: `Immolate/src/bench_cases.rs`.
 - Rust DLL artifact: `target/rust/Immolate.dll`, staged as `Immolate.dll`.
 - Version source of truth: `[manifest].version` in `lovely.toml`; keep
-  `steamodded_compat.lua` in sync with `VERSION=x.y mise run bump-version`.
+  `steamodded_compat.lua`, `Immolate/Cargo.toml`, `Immolate/Cargo.lock`, and
+  README's current-release line in sync with
+  `VERSION=x.y mise run bump-version`.
 - Docs: `README.md`, `AGENTS.md`, `BalatroSource_Guide.md`,
   `Immolate/BENCH.md`, `NOTICE.md`.
 
 ## Commands
+
 - First checkout: `mise trust`.
 - Tooling/deps: `mise run setup`, then `mise run doctor`.
 - Build DLL: `mise run build`.
@@ -40,7 +45,7 @@ Immolate. Keep agent work source-faithful, scoped, and validated.
 - Deploy: `mise run deploy`, or
   `TARGET=/path/to/Balatro/Mods/Brainstorm mise run deploy`.
 - Release: `mise run release`.
-- Version bump: `VERSION=3.2 mise run bump-version`.
+- Version bump: `VERSION=<VERSION> mise run bump-version`.
 - Bench current DLL: `BENCH_CASE=ux BENCH_BUDGET=100000 mise run bench`.
 - Compare to Original DLL: `mise run bench-compare`.
 - Full reports: `mise run bench-full` for TSV automation and
@@ -52,6 +57,7 @@ Immolate. Keep agent work source-faithful, scoped, and validated.
   `cargo run --manifest-path Immolate/Cargo.toml --release --bin brainstorm_bench -- --case ux --budget 100000 --threads 0 --repeat 5 --warmup 2`.
 
 ## Current Search Semantics
+
 - FFI entry:
   `brainstorm_search(seed_start, voucher_key, pack_key, tag1_key, tag2_key, joker_name, joker_location, souls, observatory, perkeo, deck_key, erratic, no_faces, min_face_cards, suit_ratio, num_seeds, threads)`.
 - Pass Balatro keys such as `v_telescope`, `tag_charm`,
@@ -82,6 +88,7 @@ Immolate. Keep agent work source-faithful, scoped, and validated.
   and parallel searches.
 
 ## Testing Expectations
+
 - Immolate has source-oracle tests that compare optimized Rust predicates and
   searches against the source-faithful `Instance` model for target seeds and
   edge windows. Keep these tests broad when changing RNG, filters, locks, pack
@@ -95,6 +102,7 @@ Immolate. Keep agent work source-faithful, scoped, and validated.
   `mise run check`.
 
 ## Style
+
 - Lua: Stylua, 2-space indent, minimal comments, no accidental globals, return
   tables explicitly where modules do so.
 - Rust: rustfmt + clippy; keep unsafe isolated at FFI/harness boundaries.
@@ -103,8 +111,9 @@ Immolate. Keep agent work source-faithful, scoped, and validated.
 - Preserve user changes in a dirty worktree. Never reset/revert unrelated work.
 
 ## Release Notes
-- `.github/workflows/release.yml` updates the production `latest` release on
-  `master` pushes and manual dispatch.
+
+- `.github/workflows/release.yml` creates an immutable production release when
+  a matching `v<VERSION>` tag is pushed and marks the newest release as latest.
 - PRs should state intent, validation run, and whether binary artifacts changed
   (`target/rust/Immolate.dll` or staged release DLLs). Attach UI screenshots for
   visual changes.

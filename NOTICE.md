@@ -1,7 +1,8 @@
 # Brainstorm Notices
 
-Brainstorm was created by OceanRamen. This fork and rewrite are maintained by
-KRVH.
+This repository is a full rewrite by KRVH. The original Brainstorm was created
+by OceanRamen, and the original Immolate native search engine was created by
+MathIsFun0.
 
 The original Brainstorm project is available at:
 https://github.com/OceanRamen/Brainstorm
@@ -9,12 +10,10 @@ https://github.com/OceanRamen/Brainstorm
 OceanRamen's original Brainstorm project is licensed under the Mozilla Public
 License Version 2.0.
 
-This fork's Lua mod code, Rust rewrite, and packaging are licensed under
+This rewrite's Lua mod code, Rust native code, and packaging are licensed under
 CC BY-NC-SA 4.0. See `LICENSE`.
 
-Immolate was created by MathIsFun0. KRVH rewrote the native search engine in
-Rust from the Immolate C++ source, ported unfinished functionality, and added
-the current Brainstorm search workflows. The Immolate source reference is:
+The original Immolate source reference is:
 https://github.com/SpectralPack/Immolate/tree/26f41efcc313f045bc8bdbf49e5851c56ac40b31
 
 `nativefs.lua` is third-party code by megagrump@pm.me and is licensed under the

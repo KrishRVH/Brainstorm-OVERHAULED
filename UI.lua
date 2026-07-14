@@ -1,5 +1,5 @@
 -- Brainstorm UI Module
--- Created by OceanRamen. Rewrite by KRVH. Immolate DLL by MathIsFun0.
+-- Full rewrite by KRVH. Originals: Brainstorm by OceanRamen; Immolate by MathIsFun0.
 
 local ipairs = ipairs
 local pairs = pairs
@@ -655,7 +655,7 @@ function Brainstorm.build_settings_tab()
                   {
                     n = G.UIT.T,
                     config = {
-                      text = "Original: OceanRamen. Rewrite: KRVH. Immolate: MathIsFun0.",
+                      text = "Full rewrite by KRVH. Originals: Brainstorm by OceanRamen; Immolate by MathIsFun0.",
                       scale = 0.28,
                       colour = G.C.UI.TEXT_LIGHT,
                     },
