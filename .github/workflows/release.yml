@@ -82,7 +82,7 @@ jobs:
         run: |
           mkdir -p release-artifacts
           cp "release/${PACKAGE_ZIP}" release-artifacts/
-          sha256sum "release-artifacts/${PACKAGE_ZIP}" > release-artifacts/SHA256SUMS.txt
+          (cd release-artifacts && sha256sum "${PACKAGE_ZIP}" > SHA256SUMS.txt)
 
       - name: Publish release
         env:
