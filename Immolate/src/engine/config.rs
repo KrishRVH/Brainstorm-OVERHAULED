@@ -83,8 +83,11 @@ impl CompiledFilter {
     }
 
     pub const fn serial_prefix_size(&self) -> i64 {
+        // Erratic checks dominate per-seed cost even when cheaper filters run first.
+        if self.raw.erratic {
+            return 256;
+        }
         match self.shape {
-            KernelShape::Erratic => 256,
             KernelShape::SpectralSoulPerkeo => 1_024,
             KernelShape::PackJoker | KernelShape::Souls | KernelShape::TagObservatory => 8_192,
             _ => 4_096,

@@ -1150,6 +1150,20 @@ mod tests {
     }
 
     #[test]
+    fn erratic_scheduler_family_uses_the_short_serial_prefix() {
+        for case in ["ux-erratic-suit-85", "ux-erratic-tag-suit"] {
+            let cfg = filter_config_from_benchmark(&benchmark_case(case));
+            assert_eq!(CompiledFilter::compile(&cfg).serial_prefix_size(), 256);
+        }
+
+        let ordinary_composite = filter_config_from_benchmark(&benchmark_case("ux-tag-pack-joker"));
+        assert_eq!(
+            CompiledFilter::compile(&ordinary_composite).serial_prefix_size(),
+            4_096,
+        );
+    }
+
+    #[test]
     fn current_core_matches_source_oracle_for_every_ux_benchmark_case() {
         for case in crate::bench_cases::bench_cases()
             .into_iter()
