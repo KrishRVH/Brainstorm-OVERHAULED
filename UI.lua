@@ -624,6 +624,7 @@ function Brainstorm.build_settings_tab()
                 label = "ED: Min. # of Face Cards",
                 scale = 0.8,
                 w = 4,
+                no_pips = true,
                 options = (function()
                   local opts = {}
                   for i = 0, 35 do
