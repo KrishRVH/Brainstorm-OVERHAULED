@@ -4,8 +4,8 @@ use crate::engine::seed::SearchState;
 use crate::engine::tables::{
     COMMON_JOKER_POOL, LEGENDARY_JOKER_POOL, Locks, POOL_COMMON, POOL_RARE, POOL_UNCOMMON,
     RARE_JOKER_POOL, STANDARD_JOKER_POOLS, TAG_POOL, UNCOMMON_JOKER_POOL, VOUCHER_POOL,
-    card_face_and_suit, is_ante1_locked_tag, is_arcana_pack, is_buffoon_pack, is_soulable_pack,
-    is_spectral_pack, pack_info, shop_item_type, shop_rates_for_deck, weighted_packs,
+    is_ante1_locked_tag, is_arcana_pack, is_buffoon_pack, is_soulable_pack, is_spectral_pack,
+    pack_info, shop_item_type, shop_rates_for_deck, weighted_packs,
 };
 use crate::filters::apply_filters;
 use crate::instance::Instance;
@@ -17,6 +17,7 @@ pub fn apply_compiled_filter(state: &mut SearchState, cfg: &CompiledFilter) -> b
         KernelShape::NoFilter => true,
         KernelShape::TagOnly => tag_only(state, cfg),
         KernelShape::VoucherOnly => voucher_only(state, cfg),
+        KernelShape::VoucherSecondPack => voucher_second_pack(state, cfg),
         KernelShape::PackOnly => pack_only(state, cfg),
         KernelShape::Observatory => observatory(state, cfg),
         KernelShape::ShopJoker => shop_joker(state, cfg),
@@ -57,6 +58,11 @@ fn tag_only(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
 
 fn voucher_only(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     next_voucher(state, &cfg.base_locks) == cfg.raw.voucher
+}
+
+fn voucher_second_pack(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
+    debug_assert_ne!(cfg.raw.pack, Item::Buffoon_Pack);
+    second_pack_is(state, cfg.raw.pack) && voucher_only(state, cfg)
 }
 
 fn pack_only(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
@@ -234,12 +240,9 @@ fn erratic(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     } else {
         0
     };
+    let mut draws = state.rng.erratic_draws(&mut state.seed, state.hashed_seed);
     for drawn in 0..52 {
-        let idx = state
-            .rng
-            .randint(RngKey::Erratic, &mut state.seed, state.hashed_seed, 0, 51)
-            as usize;
-        let (is_face, suit) = card_face_and_suit(idx);
+        let (is_face, suit) = draws.next_card_properties();
         if cfg.raw.no_faces && is_face {
             continue;
         }
@@ -300,20 +303,19 @@ fn erratic(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
 }
 
 fn erratic_faces_only(state: &mut SearchState, required_faces: i32) -> bool {
-    let mut face_count = 0_i32;
-    for drawn in 0..52 {
-        let index = state
-            .rng
-            .randint(RngKey::Erratic, &mut state.seed, state.hashed_seed, 0, 51)
-            as usize;
-        if matches!(index, 9..=11 | 22..=24 | 35..=37 | 48..=50) {
-            face_count += 1;
-            if face_count >= required_faces {
+    let mut faces_needed = required_faces;
+    let mut misses_left = 52 - required_faces;
+    let mut draws = state.rng.erratic_draws(&mut state.seed, state.hashed_seed);
+    for _ in 0..52 {
+        if draws.next_is_face() {
+            faces_needed -= 1;
+            if faces_needed == 0 {
                 return true;
             }
-        }
-        if face_count + 51 - drawn < required_faces {
+        } else if misses_left == 0 {
             return false;
+        } else {
+            misses_left -= 1;
         }
     }
     false
@@ -322,12 +324,10 @@ fn erratic_faces_only(state: &mut SearchState, required_faces: i32) -> bool {
 fn erratic_suits_only(state: &mut SearchState, suit_ratio: f64) -> bool {
     let required_cards = (suit_ratio * 52.0).ceil() as i32;
     let mut suit_count = [0_i32; 4];
+    let mut draws = state.rng.erratic_draws(&mut state.seed, state.hashed_seed);
     for drawn in 0..52 {
-        let index = state
-            .rng
-            .randint(RngKey::Erratic, &mut state.seed, state.hashed_seed, 0, 51)
-            as usize;
-        suit_count[index / 13] += 1;
+        let suit = draws.next_suit_index();
+        suit_count[suit] += 1;
         let top_two = top_two_suit_count(suit_count);
         if top_two >= required_cards {
             return true;
@@ -340,17 +340,13 @@ fn erratic_suits_only(state: &mut SearchState, suit_ratio: f64) -> bool {
 }
 
 fn top_two_suit_count(suit_count: [i32; 4]) -> i32 {
-    let mut first = 0_i32;
-    let mut second = 0_i32;
-    for count in suit_count {
-        if count >= first {
-            second = first;
-            first = count;
-        } else if count > second {
-            second = count;
-        }
-    }
-    first + second
+    // Pairwise comparisons expose independent work in this per-draw hot path.
+    let [a, b, c, d] = suit_count;
+    let ab_high = a.max(b);
+    let cd_high = c.max(d);
+    let ab_low = a.min(b);
+    let cd_low = c.min(d);
+    ab_high.max(cd_high) + ab_high.min(cd_high).max(ab_low.max(cd_low))
 }
 
 fn composite(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
@@ -745,7 +741,7 @@ fn randchoice_tag(state: &mut SearchState) -> Item {
 
 #[cfg(test)]
 mod tests {
-    use super::{roll_second_pack, second_pack_is, weighted_packs};
+    use super::{roll_second_pack, second_pack_is, top_two_suit_count, weighted_packs};
     use crate::engine::seed::SearchState;
 
     #[test]
@@ -761,6 +757,21 @@ mod tests {
                     entry.item == expected,
                     "pack interval mismatch for seed id {seed_id}",
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn pairwise_top_two_matches_sorted_counts() {
+        for a in 0_i32..=52 {
+            for b in 0_i32..=52 - a {
+                for c in 0_i32..=52 - a - b {
+                    for d in 0_i32..=52 - a - b - c {
+                        let mut counts = [a, b, c, d];
+                        counts.sort_unstable();
+                        assert_eq!(top_two_suit_count([a, b, c, d]), counts[2] + counts[3]);
+                    }
+                }
             }
         }
     }

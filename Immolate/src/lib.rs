@@ -409,6 +409,43 @@ mod tests {
     }
 
     #[test]
+    fn voucher_with_forced_buffoon_pack_matches_source_oracle() {
+        use crate::engine::config::{CompiledFilter, KernelShape};
+
+        let cfg = FilterConfig::from_raw(
+            "v_telescope",
+            "p_buffoon_normal_1",
+            "",
+            "",
+            "",
+            "any",
+            0.0,
+            false,
+            false,
+            "b_red",
+            false,
+            false,
+            0,
+            0.0,
+        );
+
+        assert_eq!(
+            CompiledFilter::compile(&cfg).shape,
+            KernelShape::VoucherOnly
+        );
+        let rolled_pack = filter_config_from_benchmark(&benchmark_case("ux-voucher-pack"));
+        assert_eq!(
+            CompiledFilter::compile(&rolled_pack).shape,
+            KernelShape::VoucherSecondPack
+        );
+        assert_core_matches_source_oracle("voucher+forced Buffoon", "", &cfg, 100_000);
+        assert_eq!(
+            brainstorm_search_core("", &cfg, 100_000, 1).as_deref(),
+            Some("P1111111"),
+        );
+    }
+
+    #[test]
     fn source_oracle_target_seeds_cover_every_immolate_modifier() {
         let cases = [
             ("no filters", "", FilterConfig::default()),

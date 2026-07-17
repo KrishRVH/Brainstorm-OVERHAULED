@@ -23,6 +23,7 @@ pub enum KernelShape {
     SpectralSoulPerkeo,
     Composite,
     Generic,
+    VoucherSecondPack,
 }
 
 #[derive(Clone, Debug)]
@@ -70,7 +71,9 @@ impl CompiledFilter {
     pub const fn chunk_size(&self) -> i64 {
         match self.shape {
             KernelShape::Erratic => 1_024,
-            KernelShape::Composite | KernelShape::SpectralSoulPerkeo => 2_048,
+            KernelShape::Composite
+            | KernelShape::SpectralSoulPerkeo
+            | KernelShape::VoucherSecondPack => 2_048,
             KernelShape::ShopJoker
             | KernelShape::PackJoker
             | KernelShape::AnyJoker
@@ -91,14 +94,15 @@ impl CompiledFilter {
     pub const fn auto_thread_limit(&self) -> usize {
         match self.shape {
             KernelShape::Erratic => 16,
-            KernelShape::Composite if self.raw.erratic => 16,
             KernelShape::Composite
             | KernelShape::SpectralSoulPerkeo
             | KernelShape::ShopJoker
             | KernelShape::PackJoker
             | KernelShape::AnyJoker
             | KernelShape::Souls
-            | KernelShape::Perkeo => 8,
+            | KernelShape::Perkeo => 16,
+            // Voucher + rolled second-pack searches find nearby hits where more workers cost extra.
+            KernelShape::VoucherSecondPack => 8,
             _ => 4,
         }
     }
@@ -173,7 +177,20 @@ fn classify(
         };
     }
     if has_voucher {
-        return if has_pack || raw.observatory || has_joker || has_souls || raw.perkeo || has_erratic
+        return if has_pack
+            && !raw.observatory
+            && !has_joker
+            && !has_souls
+            && !raw.perkeo
+            && !has_erratic
+        {
+            if raw.pack == Item::Buffoon_Pack {
+                // The first shop slot is always this pack, so only the voucher can reject.
+                KernelShape::VoucherOnly
+            } else {
+                KernelShape::VoucherSecondPack
+            }
+        } else if has_pack || raw.observatory || has_joker || has_souls || raw.perkeo || has_erratic
         {
             KernelShape::Composite
         } else {
