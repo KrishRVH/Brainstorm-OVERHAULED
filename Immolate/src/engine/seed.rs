@@ -20,8 +20,7 @@ impl SearchState {
     }
 
     pub fn next(&mut self) {
-        self.seed.next();
-        self.hashed_seed = self.seed.pseudohash(0);
+        self.hashed_seed = self.seed.next_and_pseudohash_zero();
         self.rng.clear();
     }
 }

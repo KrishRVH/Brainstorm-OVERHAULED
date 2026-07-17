@@ -90,6 +90,25 @@ impl Seed {
         }
     }
 
+    pub(crate) fn next_and_pseudohash_zero(&mut self) -> f64 {
+        const CACHE_KEY: usize = 7;
+        const CACHE_BIT: u64 = 1 << CACHE_KEY;
+
+        // A full-length non-carry changes only row 7, so row 6/key 7 is the exact
+        // input to the final position-1 pseudostep.
+        if self.length == 8 && self.seed[7] != 34 && self.cache_valid[6] & CACHE_BIT != 0 {
+            self.seed[7] += 1;
+            self.cache_valid[7] = 0;
+            let hash = pseudostep(self.seed_char(7), 1, self.cache[6][CACHE_KEY]);
+            self.cache[7][CACHE_KEY] = hash;
+            self.cache_valid[7] = CACHE_BIT;
+            return hash;
+        }
+
+        self.next();
+        self.pseudohash(0)
+    }
+
     pub fn pseudohash(&mut self, prefix_length: usize) -> f64 {
         if self.length == 0 {
             return 1.0;
@@ -189,6 +208,34 @@ mod tests {
             assert_eq!(seed.to_string(), expected);
             assert_cache_matches_uncached(&mut seed);
             seed.next();
+        }
+    }
+
+    #[test]
+    fn fused_next_hash_matches_separate_operations() {
+        for start in ["", "1", "Z", "11111111", "Z1111111", "ZZ111111", "ZZZZZZZZ"] {
+            for warm_cache in [false, true] {
+                let mut expected = Seed::from_str(start);
+                let mut actual = expected.clone();
+                if warm_cache {
+                    expected.pseudohash(0);
+                    actual.pseudohash(0);
+                }
+
+                for _ in 0..128 {
+                    expected.next();
+                    let expected_hash = expected.pseudohash(0);
+                    let actual_hash = actual.next_and_pseudohash_zero();
+                    assert_eq!(actual.to_string(), expected.to_string(), "start={start:?}");
+                    assert_eq!(
+                        actual_hash.to_bits(),
+                        expected_hash.to_bits(),
+                        "start={start:?}"
+                    );
+                    assert_cache_matches_uncached(&mut actual);
+                    assert_cache_matches_uncached(&mut expected);
+                }
+            }
         }
     }
 }
