@@ -80,10 +80,9 @@ impl CompiledFilter {
             KernelShape::TagObservatory => 1_024,
             // Long-tail pack Joker hits benefit from finer worker participation and cancellation.
             KernelShape::PackJoker => 1_024,
-            KernelShape::ShopJoker
-            | KernelShape::AnyJoker
-            | KernelShape::Souls
-            | KernelShape::Perkeo => 4_096,
+            // Long-tail any-Joker searches benefit from finer participation and cancellation.
+            KernelShape::AnyJoker => 1_024,
+            KernelShape::ShopJoker | KernelShape::Souls | KernelShape::Perkeo => 4_096,
             _ => 8_192,
         }
     }
