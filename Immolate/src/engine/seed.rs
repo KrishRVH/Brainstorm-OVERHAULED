@@ -1,5 +1,5 @@
 use crate::engine::rng::RngState;
-use crate::seed::{SEED_SPACE, Seed};
+use crate::seed::Seed;
 
 #[derive(Clone, Debug)]
 pub struct SearchState {
@@ -10,7 +10,7 @@ pub struct SearchState {
 
 impl SearchState {
     pub fn from_id(id: i64) -> Self {
-        let mut seed = Seed::from_id(id.rem_euclid(SEED_SPACE));
+        let mut seed = Seed::from_id(id);
         let hashed_seed = seed.pseudohash(0);
         Self {
             seed,

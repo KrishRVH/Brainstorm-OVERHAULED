@@ -1110,6 +1110,13 @@ mod tests {
         ] {
             let seed_start = Seed::from_id(target_id - offset).to_string();
             let budget = offset + 1;
+            for threads in [1, 2, 16, i32::MAX] {
+                assert_eq!(
+                    brainstorm_search_core(&seed_start, &cfg, offset, threads),
+                    None,
+                    "scheduler examined the target beyond budget with {threads} threads",
+                );
+            }
             assert_eq!(
                 brainstorm_search_core(&seed_start, &cfg, budget, 1).as_deref(),
                 Some(target),
