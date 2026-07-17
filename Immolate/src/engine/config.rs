@@ -82,7 +82,9 @@ impl CompiledFilter {
             KernelShape::PackJoker => 1_024,
             // Long-tail any-Joker searches benefit from finer participation and cancellation.
             KernelShape::AnyJoker => 1_024,
-            KernelShape::ShopJoker | KernelShape::Souls | KernelShape::Perkeo => 4_096,
+            // The canonical Normal Arcana Perkeo hit benefits from finer participation and cancellation.
+            KernelShape::Perkeo => 1_024,
+            KernelShape::ShopJoker | KernelShape::Souls => 4_096,
             _ => 8_192,
         }
     }
