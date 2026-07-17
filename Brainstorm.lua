@@ -99,8 +99,6 @@ end
 
 Brainstorm.config = Brainstorm.config or Brainstorm.default_config()
 
-Brainstorm.ar_timer = Brainstorm.ar_timer or 0
-Brainstorm.ar_frames = Brainstorm.ar_frames or 0
 Brainstorm.ar_text = Brainstorm.ar_text or nil
 Brainstorm.ar_active = Brainstorm.ar_active or false
 Brainstorm.ar_last_error = Brainstorm.ar_last_error or nil
@@ -120,7 +118,6 @@ Brainstorm.RATIO_MAP = {
   ["85%"] = 0.85,
 }
 
-Brainstorm.AR_INTERVAL = 0.01
 Brainstorm.AR_STATUS_INTERVAL = 0.15
 
 local string_lower = string.lower
@@ -760,7 +757,7 @@ local function handle_brainstorm_keypress(key)
   end
 end
 
-local function update_auto_reroll(dt)
+local function update_auto_reroll()
   if not Brainstorm or not Brainstorm.ar_active then
     return
   end
@@ -770,28 +767,22 @@ local function update_auto_reroll(dt)
   end
 
   local success = pcall(function()
-    Brainstorm.ar_frames = Brainstorm.ar_frames + 1
-    Brainstorm.ar_timer = Brainstorm.ar_timer + dt
-
-    if Brainstorm.ar_timer >= Brainstorm.AR_INTERVAL then
-      Brainstorm.ar_timer = Brainstorm.ar_timer - Brainstorm.AR_INTERVAL
-      local seed_found, err = Brainstorm.auto_reroll()
-      if seed_found == false then
-        Brainstorm.stop_auto_reroll()
-        report_auto_reroll_error(err)
-      elseif seed_found then
-        local stake = G.GAME.stake
-        local challenge = G.GAME and G.GAME.challenge and G.GAME.challenge_tab
-        G:delete_run()
-        G:start_run({
-          stake = stake,
-          seed = seed_found,
-          challenge = challenge,
-        })
-        G.GAME.used_filter = true
-        G.GAME.seeded = false
-        Brainstorm.stop_auto_reroll()
-      end
+    local seed_found, err = Brainstorm.auto_reroll()
+    if seed_found == false then
+      Brainstorm.stop_auto_reroll()
+      report_auto_reroll_error(err)
+    elseif seed_found then
+      local stake = G.GAME.stake
+      local challenge = G.GAME and G.GAME.challenge and G.GAME.challenge_tab
+      G:delete_run()
+      G:start_run({
+        stake = stake,
+        seed = seed_found,
+        challenge = challenge,
+      })
+      G.GAME.used_filter = true
+      G.GAME.seeded = false
+      Brainstorm.stop_auto_reroll()
     end
     if Brainstorm.ar_active then
       show_auto_reroll_text()
@@ -818,7 +809,7 @@ if not Brainstorm._hooks.game_update then
     if Brainstorm._hooks.game_update then
       Brainstorm._hooks.game_update(self, dt)
     end
-    update_auto_reroll(dt)
+    update_auto_reroll()
   end
 end
 
@@ -880,7 +871,6 @@ end
 
 function Brainstorm.stop_auto_reroll()
   Brainstorm.ar_active = false
-  Brainstorm.ar_frames = 0
 
   if Brainstorm.ar_text then
     Brainstorm.ar_text.cancelled = true
