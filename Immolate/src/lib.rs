@@ -1210,6 +1210,31 @@ mod tests {
     }
 
     #[test]
+    fn normal_arcana_soul_joker_preserves_source_earliest_result() {
+        use crate::engine::config::KernelShape;
+
+        let cfg = filter_config_from_benchmark(&benchmark_case("ux-normal-arcana-soul-half-joker"));
+        assert_eq!(CompiledFilter::compile(&cfg).shape, KernelShape::Composite);
+
+        let budget = 41_112;
+        let expected = source_oracle_search("", &cfg, budget);
+        assert_eq!(expected.as_deref(), Some("WLX11111"));
+
+        for threads in [0, 1, 2, 4, 8, 16, i32::MAX] {
+            assert_eq!(
+                brainstorm_search_core("", &cfg, budget - 1, threads),
+                None,
+                "normal Arcana Soul/Joker search crossed its budget with {threads} threads",
+            );
+            assert_eq!(
+                brainstorm_search_core("", &cfg, budget, threads),
+                expected,
+                "normal Arcana Soul/Joker search changed its earliest result with {threads} threads",
+            );
+        }
+    }
+
+    #[test]
     fn erratic_scheduler_family_uses_the_short_serial_prefix() {
         for case in ["ux-erratic-suit-85", "ux-erratic-tag-suit"] {
             let cfg = filter_config_from_benchmark(&benchmark_case(case));
