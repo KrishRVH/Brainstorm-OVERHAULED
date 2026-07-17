@@ -71,9 +71,8 @@ impl CompiledFilter {
     pub const fn chunk_size(&self) -> i64 {
         match self.shape {
             KernelShape::Erratic => 512,
-            KernelShape::Composite
-            | KernelShape::SpectralSoulPerkeo
-            | KernelShape::VoucherSecondPack => 2_048,
+            KernelShape::Composite => 512,
+            KernelShape::SpectralSoulPerkeo | KernelShape::VoucherSecondPack => 2_048,
             KernelShape::ShopJoker
             | KernelShape::PackJoker
             | KernelShape::AnyJoker
