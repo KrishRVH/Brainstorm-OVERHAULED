@@ -2,14 +2,14 @@ use crate::engine::rng::RngState;
 use crate::seed::Seed;
 
 #[derive(Clone, Debug)]
-pub struct SearchState {
+pub(crate) struct SearchState {
     pub seed: Seed,
     pub hashed_seed: f64,
     pub rng: RngState,
 }
 
 impl SearchState {
-    pub fn from_id(id: i64) -> Self {
+    pub(crate) fn from_id(id: i64) -> Self {
         let mut seed = Seed::from_id(id);
         let hashed_seed = seed.pseudohash(0);
         Self {
@@ -19,7 +19,7 @@ impl SearchState {
         }
     }
 
-    pub fn next(&mut self) {
+    pub(crate) fn next(&mut self) {
         self.hashed_seed = self.seed.next_and_pseudohash_zero();
         self.rng.clear();
     }

@@ -6,7 +6,7 @@ use crate::filters::{FilterConfig, JokerLocation};
 use crate::item::Item;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum KernelShape {
+pub(crate) enum KernelShape {
     NoMatch,
     NoFilter,
     TagOnly,
@@ -28,13 +28,13 @@ pub enum KernelShape {
 
 #[derive(Clone, Debug)]
 pub struct CompiledFilter {
-    pub raw: FilterConfig,
-    pub shape: KernelShape,
-    pub wants_joker_shop: bool,
-    pub wants_joker_pack: bool,
-    pub target_joker_pools: u8,
-    pub selected_soulable_pack: bool,
-    pub base_locks: Locks,
+    pub(crate) raw: FilterConfig,
+    pub(crate) shape: KernelShape,
+    pub(crate) wants_joker_shop: bool,
+    pub(crate) wants_joker_pack: bool,
+    pub(crate) target_joker_pools: u8,
+    pub(crate) selected_soulable_pack: bool,
+    pub(crate) base_locks: Locks,
 }
 
 impl CompiledFilter {
@@ -68,7 +68,11 @@ impl CompiledFilter {
         }
     }
 
-    pub const fn chunk_size(&self) -> i64 {
+    pub const fn is_no_match(&self) -> bool {
+        matches!(self.shape, KernelShape::NoMatch)
+    }
+
+    pub(crate) const fn chunk_size(&self) -> i64 {
         match self.shape {
             KernelShape::Erratic | KernelShape::Composite => 512,
             // Expensive and long-tail workflows benefit from finer participation and cancellation.
@@ -83,7 +87,7 @@ impl CompiledFilter {
         }
     }
 
-    pub const fn serial_prefix_size(&self) -> i64 {
+    pub(crate) const fn serial_prefix_size(&self) -> i64 {
         // Erratic checks dominate per-seed cost even when cheaper filters run first.
         if self.raw.erratic {
             return 256;
@@ -95,7 +99,7 @@ impl CompiledFilter {
         }
     }
 
-    pub const fn auto_thread_limit(&self) -> usize {
+    pub(crate) const fn auto_thread_limit(&self) -> usize {
         match self.shape {
             KernelShape::Erratic
             | KernelShape::Composite
@@ -112,7 +116,7 @@ impl CompiledFilter {
         }
     }
 
-    pub const fn parallel_threshold(&self) -> i64 {
+    pub(crate) const fn parallel_threshold(&self) -> i64 {
         match self.shape {
             KernelShape::Erratic => 8_192,
             KernelShape::Composite if self.raw.erratic => 8_192,

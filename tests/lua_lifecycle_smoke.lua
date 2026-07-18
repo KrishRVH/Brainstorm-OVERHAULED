@@ -1,3 +1,5 @@
+-- luacheck: ignore 131/love 131/Controller 131/create_UIBox_round_scores_row 131/Event 131/lighten 131/darken 131/Particles 131/DynaText 131/UIBox
+
 local repo = assert(arg[1], "repository path is required")
 
 package.preload.lovely = function()

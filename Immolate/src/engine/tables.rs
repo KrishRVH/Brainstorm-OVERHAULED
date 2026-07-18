@@ -1,26 +1,24 @@
 use crate::item::{
-    COMMON_JOKERS, ITEM_COUNT, Item, LEGENDARY_JOKERS, PACKS, Pack, RARE_JOKERS, SPECTRALS, TAGS,
-    TAROTS, UNCOMMON_JOKERS, VOUCHERS, WeightedItem,
+    COMMON_JOKERS, ITEM_COUNT, Item, LEGENDARY_JOKERS, PACKS, Pack, RARE_JOKERS, TAGS,
+    UNCOMMON_JOKERS, VOUCHERS, WeightedItem,
 };
 
-pub const POOL_COMMON: u8 = 1 << 0;
-pub const POOL_UNCOMMON: u8 = 1 << 1;
-pub const POOL_RARE: u8 = 1 << 2;
-pub const POOL_LEGENDARY: u8 = 1 << 3;
-pub const STANDARD_JOKER_POOLS: u8 = POOL_COMMON | POOL_UNCOMMON | POOL_RARE;
+pub(crate) const POOL_COMMON: u8 = 1 << 0;
+pub(crate) const POOL_UNCOMMON: u8 = 1 << 1;
+pub(crate) const POOL_RARE: u8 = 1 << 2;
+pub(crate) const POOL_LEGENDARY: u8 = 1 << 3;
+pub(crate) const STANDARD_JOKER_POOLS: u8 = POOL_COMMON | POOL_UNCOMMON | POOL_RARE;
 const LOCK_WORDS: usize = ITEM_COUNT.div_ceil(u64::BITS as usize);
 
-pub const TAG_POOL: &[Item] = &TAGS;
-pub const VOUCHER_POOL: &[Item] = &VOUCHERS;
-pub const TAROT_POOL: &[Item] = &TAROTS;
-pub const SPECTRAL_POOL: &[Item] = &SPECTRALS;
-pub const COMMON_JOKER_POOL: &[Item] = &COMMON_JOKERS;
-pub const UNCOMMON_JOKER_POOL: &[Item] = &UNCOMMON_JOKERS;
-pub const RARE_JOKER_POOL: &[Item] = &RARE_JOKERS;
-pub const LEGENDARY_JOKER_POOL: &[Item] = &LEGENDARY_JOKERS;
+pub(crate) const TAG_POOL: &[Item] = &TAGS;
+pub(crate) const VOUCHER_POOL: &[Item] = &VOUCHERS;
+pub(crate) const COMMON_JOKER_POOL: &[Item] = &COMMON_JOKERS;
+pub(crate) const UNCOMMON_JOKER_POOL: &[Item] = &UNCOMMON_JOKERS;
+pub(crate) const RARE_JOKER_POOL: &[Item] = &RARE_JOKERS;
+pub(crate) const LEGENDARY_JOKER_POOL: &[Item] = &LEGENDARY_JOKERS;
 
 #[derive(Clone, Copy, Debug)]
-pub struct ShopRates {
+pub(crate) struct ShopRates {
     pub joker: f64,
     pub tarot: f64,
     pub planet: f64,
@@ -29,13 +27,13 @@ pub struct ShopRates {
 }
 
 impl ShopRates {
-    pub const fn total(self) -> f64 {
+    pub(crate) const fn total(self) -> f64 {
         self.joker + self.tarot + self.planet + self.playing_card + self.spectral
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Locks {
+pub(crate) struct Locks {
     locked: [u64; LOCK_WORDS],
 }
 
@@ -50,7 +48,7 @@ impl Default for Locks {
 }
 
 impl Locks {
-    pub fn for_deck(deck: Item) -> Self {
+    pub(crate) fn for_deck(deck: Item) -> Self {
         let mut out = Self::default();
         match deck {
             Item::Magic_Deck => out.activate_voucher(Item::Crystal_Ball),
@@ -65,19 +63,19 @@ impl Locks {
         out
     }
 
-    pub fn is_locked(&self, item: Item) -> bool {
+    pub(crate) fn is_locked(&self, item: Item) -> bool {
         let index = item.idx();
         index < ITEM_COUNT && self.locked[index / 64] & (1_u64 << (index % 64)) != 0
     }
 
-    pub fn lock(&mut self, item: Item) {
+    pub(crate) fn lock(&mut self, item: Item) {
         let index = item.idx();
         if index < ITEM_COUNT {
             self.locked[index / 64] |= 1_u64 << (index % 64);
         }
     }
 
-    pub fn unlock(&mut self, item: Item) {
+    pub(crate) fn unlock(&mut self, item: Item) {
         let index = item.idx();
         if index < ITEM_COUNT {
             self.locked[index / 64] &= !(1_u64 << (index % 64));
@@ -154,11 +152,11 @@ const FIRST_SHOP_IMPOSSIBLE_TARGET_JOKERS: [Item; 11] = [
     Item::Perkeo,
 ];
 
-pub fn is_first_shop_possible_joker(target: Item) -> bool {
+pub(crate) fn is_first_shop_possible_joker(target: Item) -> bool {
     !FIRST_SHOP_IMPOSSIBLE_TARGET_JOKERS.contains(&target)
 }
 
-pub fn target_joker_pools(target: Item) -> u8 {
+pub(crate) fn target_joker_pools(target: Item) -> u8 {
     if !is_first_shop_possible_joker(target) {
         return 0;
     }
@@ -179,7 +177,7 @@ pub fn target_joker_pools(target: Item) -> u8 {
     pools
 }
 
-pub fn pack_info(pack: Item) -> Pack {
+pub(crate) fn pack_info(pack: Item) -> Pack {
     let index = pack.idx().checked_sub(Item::Arcana_Pack.idx());
     if index.is_some_and(|index| index < PACKS.len() - 1) {
         crate::instance::pack_info(pack)
@@ -192,32 +190,32 @@ pub fn pack_info(pack: Item) -> Pack {
     }
 }
 
-pub fn is_buffoon_pack(pack: Item) -> bool {
+pub(crate) fn is_buffoon_pack(pack: Item) -> bool {
     matches!(
         pack,
         Item::Buffoon_Pack | Item::Jumbo_Buffoon_Pack | Item::Mega_Buffoon_Pack
     )
 }
 
-pub fn is_arcana_pack(pack: Item) -> bool {
+pub(crate) fn is_arcana_pack(pack: Item) -> bool {
     matches!(
         pack,
         Item::Arcana_Pack | Item::Jumbo_Arcana_Pack | Item::Mega_Arcana_Pack
     )
 }
 
-pub fn is_spectral_pack(pack: Item) -> bool {
+pub(crate) fn is_spectral_pack(pack: Item) -> bool {
     matches!(
         pack,
         Item::Spectral_Pack | Item::Jumbo_Spectral_Pack | Item::Mega_Spectral_Pack
     )
 }
 
-pub fn is_soulable_pack(pack: Item) -> bool {
+pub(crate) fn is_soulable_pack(pack: Item) -> bool {
     is_arcana_pack(pack) || is_spectral_pack(pack)
 }
 
-pub fn is_ante1_locked_tag(item: Item) -> bool {
+pub(crate) fn is_ante1_locked_tag(item: Item) -> bool {
     matches!(
         item,
         Item::Negative_Tag
@@ -232,7 +230,7 @@ pub fn is_ante1_locked_tag(item: Item) -> bool {
     )
 }
 
-pub fn shop_rates_for_deck(deck: Item) -> ShopRates {
+pub(crate) fn shop_rates_for_deck(deck: Item) -> ShopRates {
     let mut rates = ShopRates {
         joker: 20.0,
         tarot: 4.0,
@@ -250,7 +248,7 @@ pub fn shop_rates_for_deck(deck: Item) -> ShopRates {
     rates
 }
 
-pub fn shop_item_type(rates: ShopRates, mut poll: f64) -> Item {
+pub(crate) fn shop_item_type(rates: ShopRates, mut poll: f64) -> Item {
     if poll < rates.joker {
         return Item::T_Joker;
     }
@@ -269,13 +267,6 @@ pub fn shop_item_type(rates: ShopRates, mut poll: f64) -> Item {
     Item::T_Spectral
 }
 
-pub fn card_face_and_suit(index: usize) -> (bool, usize) {
-    let rank_idx = index % 13;
-    let suit_idx = index / 13;
-    let is_face = matches!(rank_idx, 9..=11);
-    (is_face, suit_idx)
-}
-
-pub fn weighted_packs() -> &'static [WeightedItem; 16] {
+pub(crate) fn weighted_packs() -> &'static [WeightedItem; 16] {
     &PACKS
 }

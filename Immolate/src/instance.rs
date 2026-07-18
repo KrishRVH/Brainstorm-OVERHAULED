@@ -1,7 +1,7 @@
 use crate::item::{
-    BOSSES, CARDS, COMMON_JOKERS, COMMON_JOKERS_100, Card, ENHANCEMENTS, ITEM_COUNT, Item,
-    JokerData, JokerStickers, LEGENDARY_JOKERS, PACKS, PLANETS, Pack, RARE_JOKERS, RARE_JOKERS_100,
-    SPECTRALS, ShopItem, TAGS, TAROTS, UNCOMMON_JOKERS, UNCOMMON_JOKERS_100, VOUCHERS,
+    COMMON_JOKERS, COMMON_JOKERS_100, ITEM_COUNT, Item, JokerData, JokerStickers, LEGENDARY_JOKERS,
+    PACKS, PLANETS, Pack, RARE_JOKERS, RARE_JOKERS_100, SPECTRALS, ShopItem, TAGS, TAROTS,
+    UNCOMMON_JOKERS, UNCOMMON_JOKERS_100, VOUCHERS,
 };
 use crate::rng::{LuaRandom, ante_to_string, fract, pseudohash_from, round13};
 use crate::seed::Seed;
@@ -9,9 +9,7 @@ use crate::seed::Seed;
 const SOURCE_SHOP: &str = "sho";
 const SOURCE_ARCANA_PACK: &str = "ar1";
 const SOURCE_OMEN_GLOBE: &str = "ar2";
-const SOURCE_CELESTIAL_PACK: &str = "pl1";
 const SOURCE_SPECTRAL_PACK: &str = "spe";
-const SOURCE_STANDARD_PACK: &str = "sta";
 const SOURCE_BUFFOON_PACK: &str = "buf";
 const SOURCE_SOUL: &str = "sou";
 const SOURCE_WRAITH: &str = "wra";
@@ -24,12 +22,6 @@ const RANDOM_JOKER_RARE: &str = "Joker3";
 const RANDOM_JOKER_LEGENDARY: &str = "Joker4";
 const RANDOM_JOKER_RARITY: &str = "rarity";
 const RANDOM_JOKER_EDITION: &str = "edi";
-const RANDOM_STANDARD_HAS_ENHANCEMENT: &str = "stdset";
-const RANDOM_ENHANCEMENT: &str = "Enhanced";
-const RANDOM_CARD: &str = "front";
-const RANDOM_STANDARD_EDITION: &str = "standard_edition";
-const RANDOM_STANDARD_HAS_SEAL: &str = "stdseal";
-const RANDOM_STANDARD_SEAL: &str = "stdsealtype";
 const RANDOM_SHOP_PACK: &str = "shop_pack";
 const RANDOM_TAROT: &str = "Tarot";
 const RANDOM_SPECTRAL: &str = "Spectral";
@@ -43,7 +35,6 @@ const RANDOM_RENTAL: &str = "ssjr";
 const RANDOM_ETERNAL_PERISHABLE: &str = "etperpoll";
 const RANDOM_RENTAL_PACK: &str = "packssjr";
 const RANDOM_ETERNAL_PERISHABLE_PACK: &str = "packetper";
-const RANDOM_BOSS: &str = "boss";
 const RANDOM_OMEN_GLOBE: &str = "omen_globe";
 
 const KEY_CARD_TYPE_ANTE1: &str = "cdt1";
@@ -62,7 +53,7 @@ const KEY_JOKER_RARE_SHOP_ANTE1: &str = "Joker3sho1";
 const KEY_JOKER_RARE_BUFFOON_ANTE1: &str = "Joker3buf1";
 
 #[derive(Clone, Copy, Debug)]
-pub struct ShopInstance {
+pub(crate) struct ShopInstance {
     pub joker_rate: f64,
     pub tarot_rate: f64,
     pub planet_rate: f64,
@@ -101,11 +92,6 @@ impl Cache {
             generated_first_pack: false,
         }
     }
-
-    fn clear(&mut self) {
-        self.active = 0;
-        self.generated_first_pack = false;
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -130,7 +116,7 @@ impl Default for InstParams {
 }
 
 #[derive(Clone, Debug)]
-pub struct Instance {
+pub(crate) struct Instance {
     locked: [bool; ITEM_COUNT],
     pub seed: Seed,
     hashed_seed: f64,
@@ -139,7 +125,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(mut seed: Seed) -> Self {
+    pub(crate) fn new(mut seed: Seed) -> Self {
         let hashed_seed = seed.pseudohash(0);
         Self {
             locked: [false; ITEM_COUNT],
@@ -150,14 +136,7 @@ impl Instance {
         }
     }
 
-    pub fn next(&mut self) {
-        self.seed.next();
-        self.hashed_seed = self.seed.pseudohash(0);
-        self.params = InstParams::default();
-        self.cache.clear();
-    }
-
-    pub fn get_node(&mut self, id: &str) -> f64 {
+    pub(crate) fn get_node(&mut self, id: &str) -> f64 {
         let position = self.cache.nodes[..self.cache.active]
             .iter()
             .position(|node| node.key == id);
@@ -185,17 +164,12 @@ impl Instance {
         (*node + self.hashed_seed) / 2.0
     }
 
-    pub fn random(&mut self, id: &str) -> f64 {
+    pub(crate) fn random(&mut self, id: &str) -> f64 {
         let mut rng = LuaRandom::new(self.get_node(id));
         rng.random()
     }
 
-    pub fn randint(&mut self, id: &str, min: i32, max: i32) -> i32 {
-        let mut rng = LuaRandom::new(self.get_node(id));
-        rng.randint(min, max)
-    }
-
-    pub fn randchoice(&mut self, id: &str, items: &[Item]) -> Item {
+    pub(crate) fn randchoice(&mut self, id: &str, items: &[Item]) -> Item {
         let mut rng = LuaRandom::new(self.get_node(id));
         let idx = rng.randint(0, items.len() as i32 - 1) as usize;
         let item = items[idx];
@@ -226,23 +200,23 @@ impl Instance {
         items[idx - 1].item
     }
 
-    pub fn lock(&mut self, item: Item) {
+    pub(crate) fn lock(&mut self, item: Item) {
         if item.idx() < self.locked.len() {
             self.locked[item.idx()] = true;
         }
     }
 
-    pub fn unlock(&mut self, item: Item) {
+    pub(crate) fn unlock(&mut self, item: Item) {
         if item.idx() < self.locked.len() {
             self.locked[item.idx()] = false;
         }
     }
 
-    pub fn is_locked(&self, item: Item) -> bool {
+    pub(crate) fn is_locked(&self, item: Item) -> bool {
         item.idx() < self.locked.len() && self.locked[item.idx()]
     }
 
-    pub fn init_locks(&mut self, ante: i32, fresh_profile: bool, fresh_run: bool) {
+    pub(crate) fn init_locks(&mut self, ante: i32, fresh_profile: bool, fresh_run: bool) {
         for pair in VOUCHERS.chunks_exact(2) {
             self.lock(pair[1]);
         }
@@ -396,7 +370,7 @@ impl Instance {
         }
     }
 
-    pub fn next_tarot(&mut self, source: &str, ante: i32, soulable: bool) -> Item {
+    pub(crate) fn next_tarot(&mut self, source: &str, ante: i32, soulable: bool) -> Item {
         let ante_str = ante_to_string(ante);
         if soulable
             && (self.params.showman || !self.is_locked(Item::The_Soul))
@@ -407,7 +381,7 @@ impl Instance {
         self.randchoice(&format!("{RANDOM_TAROT}{source}{ante_str}"), &TAROTS)
     }
 
-    pub fn next_planet(&mut self, source: &str, ante: i32, soulable: bool) -> Item {
+    pub(crate) fn next_planet(&mut self, source: &str, ante: i32, soulable: bool) -> Item {
         let ante_str = ante_to_string(ante);
         if soulable
             && (self.params.showman || !self.is_locked(Item::Black_Hole))
@@ -418,7 +392,7 @@ impl Instance {
         self.randchoice(&format!("{RANDOM_PLANET}{source}{ante_str}"), &PLANETS)
     }
 
-    pub fn next_spectral(&mut self, source: &str, ante: i32, soulable: bool) -> Item {
+    pub(crate) fn next_spectral(&mut self, source: &str, ante: i32, soulable: bool) -> Item {
         let ante_str = ante_to_string(ante);
         if soulable {
             let mut forced = Item::RETRY;
@@ -439,7 +413,7 @@ impl Instance {
         self.randchoice(&format!("{RANDOM_SPECTRAL}{source}{ante_str}"), &SPECTRALS)
     }
 
-    pub fn next_joker(&mut self, source: &str, ante: i32, has_stickers: bool) -> JokerData {
+    pub(crate) fn next_joker(&mut self, source: &str, ante: i32, has_stickers: bool) -> JokerData {
         let ante_str = ante_to_string(ante);
         let rarity = if source == SOURCE_SOUL {
             Item::Legendary
@@ -583,7 +557,7 @@ impl Instance {
         }
     }
 
-    pub fn shop_instance(&self) -> ShopInstance {
+    pub(crate) fn shop_instance(&self) -> ShopInstance {
         let mut tarot_rate = 4.0;
         let mut planet_rate = 4.0;
         let mut playing_card_rate = 0.0;
@@ -613,7 +587,7 @@ impl Instance {
         }
     }
 
-    pub fn next_shop_item(&mut self, ante: i32) -> ShopItem {
+    pub(crate) fn next_shop_item(&mut self, ante: i32) -> ShopItem {
         let ante_str = ante_to_string(ante);
         let shop = self.shop_instance();
         let cdt_poll = if ante == 1 {
@@ -650,7 +624,7 @@ impl Instance {
         }
     }
 
-    pub fn next_pack(&mut self, ante: i32) -> Item {
+    pub(crate) fn next_pack(&mut self, ante: i32) -> Item {
         if ante <= 2 && !self.cache.generated_first_pack && self.params.version > 10099 {
             self.cache.generated_first_pack = true;
             return Item::Buffoon_Pack;
@@ -663,7 +637,7 @@ impl Instance {
         }
     }
 
-    pub fn next_arcana_pack(&mut self, size: usize, ante: i32) -> Vec<Item> {
+    pub(crate) fn next_arcana_pack(&mut self, size: usize, ante: i32) -> Vec<Item> {
         let mut pack = Vec::with_capacity(size);
         for _ in 0..size {
             let item = if self.is_voucher_active(Item::Omen_Globe)
@@ -684,22 +658,7 @@ impl Instance {
         pack
     }
 
-    pub fn next_celestial_pack(&mut self, size: usize, ante: i32) -> Vec<Item> {
-        let mut pack = Vec::with_capacity(size);
-        for _ in 0..size {
-            let item = self.next_planet(SOURCE_CELESTIAL_PACK, ante, true);
-            if !self.params.showman {
-                self.lock(item);
-            }
-            pack.push(item);
-        }
-        for item in &pack {
-            self.unlock(*item);
-        }
-        pack
-    }
-
-    pub fn next_spectral_pack(&mut self, size: usize, ante: i32) -> Vec<Item> {
+    pub(crate) fn next_spectral_pack(&mut self, size: usize, ante: i32) -> Vec<Item> {
         let mut pack = Vec::with_capacity(size);
         for _ in 0..size {
             let item = self.next_spectral(SOURCE_SPECTRAL_PACK, ante, true);
@@ -714,7 +673,7 @@ impl Instance {
         pack
     }
 
-    pub fn next_buffoon_pack(&mut self, size: usize, ante: i32) -> Vec<JokerData> {
+    pub(crate) fn next_buffoon_pack(&mut self, size: usize, ante: i32) -> Vec<JokerData> {
         let mut pack = Vec::with_capacity(size);
         for _ in 0..size {
             let joker = self.next_joker(SOURCE_BUFFOON_PACK, ante, true);
@@ -729,60 +688,13 @@ impl Instance {
         pack
     }
 
-    pub fn next_standard_card(&mut self, ante: i32) -> Card {
-        let ante_str = ante_to_string(ante);
-        let enhancement =
-            if self.random(&format!("{RANDOM_STANDARD_HAS_ENHANCEMENT}{ante_str}")) <= 0.6 {
-                Item::No_Enhancement
-            } else {
-                self.randchoice(
-                    &format!("{RANDOM_ENHANCEMENT}{SOURCE_STANDARD_PACK}{ante_str}"),
-                    &ENHANCEMENTS,
-                )
-            };
-        let base = self.randchoice(
-            &format!("{RANDOM_CARD}{SOURCE_STANDARD_PACK}{ante_str}"),
-            &CARDS,
-        );
-        let edition_poll = self.random(&format!("{RANDOM_STANDARD_EDITION}{ante_str}"));
-        let edition = if edition_poll > 0.988 {
-            Item::Polychrome
-        } else if edition_poll > 0.96 {
-            Item::Holographic
-        } else if edition_poll > 0.92 {
-            Item::Foil
-        } else {
-            Item::No_Edition
-        };
-        let seal = if self.random(&format!("{RANDOM_STANDARD_HAS_SEAL}{ante_str}")) <= 0.8 {
-            Item::No_Seal
-        } else {
-            let seal_poll = self.random(&format!("{RANDOM_STANDARD_SEAL}{ante_str}"));
-            if seal_poll > 0.75 {
-                Item::Red_Seal
-            } else if seal_poll > 0.5 {
-                Item::Blue_Seal
-            } else if seal_poll > 0.25 {
-                Item::Gold_Seal
-            } else {
-                Item::Purple_Seal
-            }
-        };
-        Card {
-            base,
-            enhancement,
-            edition,
-            seal,
-        }
-    }
-
-    pub fn is_voucher_active(&self, voucher: Item) -> bool {
+    pub(crate) fn is_voucher_active(&self, voucher: Item) -> bool {
         let start = Item::Overstock.idx();
         let idx = voucher.idx().saturating_sub(start);
         idx < self.params.vouchers.len() && self.params.vouchers[idx]
     }
 
-    pub fn activate_voucher(&mut self, voucher: Item) {
+    pub(crate) fn activate_voucher(&mut self, voucher: Item) {
         let start = Item::Overstock.idx();
         let idx = voucher.idx().saturating_sub(start);
         if idx < self.params.vouchers.len() {
@@ -796,7 +708,7 @@ impl Instance {
         }
     }
 
-    pub fn next_voucher(&mut self, ante: i32) -> Item {
+    pub(crate) fn next_voucher(&mut self, ante: i32) -> Item {
         if ante == 1 {
             self.randchoice(KEY_VOUCHER_ANTE1, &VOUCHERS)
         } else {
@@ -807,7 +719,7 @@ impl Instance {
         }
     }
 
-    pub fn set_deck(&mut self, deck: Item) {
+    pub(crate) fn set_deck(&mut self, deck: Item) {
         self.params.deck = deck;
         if deck == Item::Magic_Deck {
             self.activate_voucher(Item::Crystal_Ball);
@@ -822,41 +734,16 @@ impl Instance {
         }
     }
 
-    pub fn next_tag(&mut self, ante: i32) -> Item {
+    pub(crate) fn next_tag(&mut self, ante: i32) -> Item {
         if ante == 1 {
             self.randchoice(KEY_TAG_ANTE1, &TAGS)
         } else {
             self.randchoice(&format!("{RANDOM_TAGS}{}", ante_to_string(ante)), &TAGS)
         }
     }
-
-    pub fn next_boss(&mut self, ante: i32) -> Item {
-        let mut boss_pool = Vec::with_capacity(16);
-        for boss in BOSSES {
-            if !self.is_locked(boss)
-                && ((ante % 8 == 0 && boss > Item::B_F_BEGIN)
-                    || (ante % 8 != 0 && boss < Item::B_F_BEGIN))
-            {
-                boss_pool.push(boss);
-            }
-        }
-        if boss_pool.is_empty() {
-            for boss in BOSSES {
-                if (ante % 8 == 0 && boss > Item::B_F_BEGIN)
-                    || (ante % 8 != 0 && boss < Item::B_F_BEGIN)
-                {
-                    self.unlock(boss);
-                }
-            }
-            return self.next_boss(ante);
-        }
-        let chosen = self.randchoice(RANDOM_BOSS, &boss_pool);
-        self.lock(chosen);
-        chosen
-    }
 }
 
-pub fn pack_info(pack: Item) -> Pack {
+pub(crate) fn pack_info(pack: Item) -> Pack {
     const PACK_INFO: [Pack; 15] = [
         Pack {
             pack_type: Item::Arcana_Pack,
@@ -938,7 +825,7 @@ pub fn pack_info(pack: Item) -> Pack {
     PACK_INFO[idx]
 }
 
-pub fn soul_yields_perkeo(inst: &mut Instance, ante: i32) -> bool {
+pub(crate) fn soul_yields_perkeo(inst: &mut Instance, ante: i32) -> bool {
     inst.random(&format!(
         "{RANDOM_JOKER_RARITY}{}{SOURCE_SOUL}",
         ante_to_string(ante),

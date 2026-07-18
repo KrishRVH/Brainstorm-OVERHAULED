@@ -502,7 +502,7 @@ description = "Format Lua and Rust"
 shell = "bash -c"
 run = '''
 set -euo pipefail
-lua_files=(Brainstorm.lua UI.lua steamodded_compat.lua tests/lua_lifecycle_smoke.lua)
+lua_files=(Brainstorm.lua UI.lua steamodded_compat.lua nativefs.lua tests/lua_lifecycle_smoke.lua)
 stylua "${lua_files[@]}"
 cargo fmt --manifest-path "$IMMO_DIR/Cargo.toml"
 '''
@@ -513,9 +513,10 @@ shell = "bash -c"
 run = '''
 set -euo pipefail
 export PATH="$HOME/.luarocks/bin:$PATH"
-lua_files=(Brainstorm.lua UI.lua steamodded_compat.lua)
+lua_files=(Brainstorm.lua UI.lua steamodded_compat.lua nativefs.lua)
 test_lua_files=(tests/lua_lifecycle_smoke.lua)
-syntax_lua_files=("${lua_files[@]}" "${test_lua_files[@]}" nativefs.lua)
+syntax_lua_files=("${lua_files[@]}" "${test_lua_files[@]}")
+luacheck_files=("${lua_files[@]}" "${test_lua_files[@]}")
 
 command -v stylua >/dev/null || { echo "stylua not found. Install Stylua, then run: mise run doctor"; exit 1; }
 command -v luajit >/dev/null || { echo "luajit not found. Install LuaJIT, then run: mise run doctor"; exit 1; }
@@ -525,7 +526,7 @@ stylua --check "${lua_files[@]}" "${test_lua_files[@]}"
 for lua_file in "${syntax_lua_files[@]}"; do
   luajit -b "$lua_file" "/tmp/brainstorm-${lua_file//\//-}.luajit"
 done
-luacheck "${lua_files[@]}"
+luacheck "${luacheck_files[@]}"
 mise run check-version
 '''
 

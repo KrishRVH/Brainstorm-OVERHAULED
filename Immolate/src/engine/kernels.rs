@@ -11,7 +11,7 @@ use crate::filters::apply_filters;
 use crate::instance::Instance;
 use crate::item::Item;
 
-pub fn apply_compiled_filter(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
+pub(crate) fn apply_compiled_filter(state: &mut SearchState, cfg: &CompiledFilter) -> bool {
     match cfg.shape {
         KernelShape::NoMatch => false,
         KernelShape::NoFilter => true,

@@ -188,9 +188,7 @@ mod windows_harness {
     use std::ptr;
     use std::time::{Duration, Instant};
 
-    use immolate::engine::config::{CompiledFilter, KernelShape};
-    use immolate::filters::FilterConfig;
-    use immolate::seed::{SEED_SPACE, Seed};
+    use immolate::{CompiledFilter, FilterConfig, SEED_SPACE, Seed};
 
     use super::bench_cases::{self as bench, BenchCase, BenchGroup, BenchShape};
     use super::{
@@ -673,7 +671,7 @@ mod windows_harness {
         },
     }
 
-    pub fn main() {
+    pub(crate) fn main() {
         match parse_command(env::args().skip(1).collect()) {
             Ok(Command::Bench {
                 dll,
@@ -2007,7 +2005,7 @@ mod windows_harness {
             case.min_face_cards,
             case.suit_ratio,
         );
-        let compiled_no_match = CompiledFilter::compile(&config).shape == KernelShape::NoMatch;
+        let compiled_no_match = CompiledFilter::compile(&config).is_no_match();
         if (case.shape == BenchShape::Static) != compiled_no_match {
             return Err(format!(
                 "benchmark case {} has shape {}, but the filter compiler says {}",

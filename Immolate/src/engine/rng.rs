@@ -2,7 +2,7 @@ use crate::rng::{LuaRandom, fract, pseudohash_from_bytes, round13};
 use crate::seed::Seed;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RngKey {
+pub(crate) enum RngKey {
     Tag1,
     Voucher1,
     ShopPack1,
@@ -18,12 +18,10 @@ pub enum RngKey {
     JokerLegendary,
     SoulTarot1,
     SoulSpectral1,
-    TarotArcana1,
-    SpectralPack1,
     Erratic,
 }
 
-const KEY_COUNT: usize = 18;
+const KEY_COUNT: usize = 16;
 // Lua's 0..51 draw splits the 52-bit mantissa into four sorted 13-card suits.
 // Face cards occupy ranks 9..=11 inside each exact quarter-width suit interval.
 const ERRATIC_MANTISSA_MASK: u64 = (1_u64 << 52) - 1;
@@ -45,7 +43,7 @@ impl RngKey {
         self as usize
     }
 
-    pub const fn name(self) -> &'static str {
+    pub(crate) const fn name(self) -> &'static str {
         match self {
             Self::Tag1 => "Tag1",
             Self::Voucher1 => "Voucher1",
@@ -62,15 +60,13 @@ impl RngKey {
             Self::JokerLegendary => "Joker4",
             Self::SoulTarot1 => "soul_Tarot1",
             Self::SoulSpectral1 => "soul_Spectral1",
-            Self::TarotArcana1 => "Tarotar11",
-            Self::SpectralPack1 => "Spectralspe1",
             Self::Erratic => "erratic",
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct RngState {
+pub(crate) struct RngState {
     nodes: [f64; KEY_COUNT],
     initialized_mask: u32,
     resample_nodes: Vec<ResampleNode>,
@@ -96,17 +92,17 @@ impl Default for RngState {
 }
 
 impl RngState {
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.initialized_mask = 0;
         self.active_resample_nodes = 0;
     }
 
-    pub fn random(&mut self, key: RngKey, seed: &mut Seed, hashed_seed: f64) -> f64 {
+    pub(crate) fn random(&mut self, key: RngKey, seed: &mut Seed, hashed_seed: f64) -> f64 {
         let node = self.get_fixed_node(key, seed, hashed_seed);
         LuaRandom::new(node).random()
     }
 
-    pub fn randint(
+    pub(crate) fn randint(
         &mut self,
         key: RngKey,
         seed: &mut Seed,
@@ -136,7 +132,7 @@ impl RngState {
         }
     }
 
-    pub fn randint_resample(
+    pub(crate) fn randint_resample(
         &mut self,
         key: RngKey,
         resample: u16,

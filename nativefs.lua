@@ -278,9 +278,9 @@ function nativefs.newFileData(filepath)
     return nil, err
   end
 
-  local data, err = f:read("data", "all")
+  local data, read_err = f:read("data", "all")
   f:close()
-  return data, err
+  return data, read_err
 end
 
 function nativefs.mount(archive, mountPoint, appendToPath)
@@ -311,9 +311,9 @@ function nativefs.read(containerOrName, nameOrSize, sizeOrNil)
     return nil, err
   end
 
-  local data, size = file:read(container, size)
+  local data, read_size = file:read(container, size)
   file:close()
-  return data, size
+  return data, read_size
 end
 
 local function writeFile(mode, name, data, size)

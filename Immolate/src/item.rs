@@ -4,7 +4,8 @@
 
 #[repr(usize)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub enum Item {
+#[allow(clippy::upper_case_acronyms)]
+pub(crate) enum Item {
     RETRY = 0,
     J_BEGIN = 1,
     J_C_BEGIN = 2,
@@ -515,24 +516,24 @@ pub enum Item {
     ITEMS_END = 507,
 }
 
-pub const ITEM_COUNT: usize = Item::ITEMS_END as usize;
+pub(crate) const ITEM_COUNT: usize = Item::ITEMS_END as usize;
 
 impl Item {
     #[inline]
-    pub const fn idx(self) -> usize {
+    pub(crate) const fn idx(self) -> usize {
         self as usize
     }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct JokerStickers {
+pub(crate) struct JokerStickers {
     pub eternal: bool,
     pub perishable: bool,
     pub rental: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct JokerData {
+pub(crate) struct JokerData {
     pub joker: Item,
     pub rarity: Item,
     pub edition: Item,
@@ -551,7 +552,7 @@ impl Default for JokerData {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ShopItem {
+pub(crate) struct ShopItem {
     pub item_type: Item,
     pub item: Item,
     pub joker_data: JokerData,
@@ -568,38 +569,19 @@ impl Default for ShopItem {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WeightedItem {
+pub(crate) struct WeightedItem {
     pub item: Item,
     pub weight: f64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Pack {
+pub(crate) struct Pack {
     pub pack_type: Item,
     pub size: usize,
     pub choices: usize,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Card {
-    pub base: Item,
-    pub enhancement: Item,
-    pub edition: Item,
-    pub seal: Item,
-}
-
-pub const ENHANCEMENTS: [Item; 8] = [
-    Item::Bonus_Card,
-    Item::Mult_Card,
-    Item::Wild_Card,
-    Item::Glass_Card,
-    Item::Steel_Card,
-    Item::Stone_Card,
-    Item::Gold_Card,
-    Item::Lucky_Card,
-];
-
-pub const CARDS: [Item; 52] = [
+pub(crate) const CARDS: [Item; 52] = [
     Item::C_2,
     Item::C_3,
     Item::C_4,
@@ -654,25 +636,7 @@ pub const CARDS: [Item; 52] = [
     Item::S_T,
 ];
 
-pub const SUITS: [Item; 4] = [Item::Spades, Item::Hearts, Item::Clubs, Item::Diamonds];
-
-pub const RANKS: [Item; 13] = [
-    Item::_2,
-    Item::_3,
-    Item::_4,
-    Item::_5,
-    Item::_6,
-    Item::_7,
-    Item::_8,
-    Item::_9,
-    Item::_10,
-    Item::Jack,
-    Item::Queen,
-    Item::King,
-    Item::Ace,
-];
-
-pub const PACKS: [WeightedItem; 16] = [
+pub(crate) const PACKS: [WeightedItem; 16] = [
     WeightedItem {
         item: Item::RETRY,
         weight: 22.42,
@@ -739,7 +703,7 @@ pub const PACKS: [WeightedItem; 16] = [
     },
 ];
 
-pub const TAROTS: [Item; 22] = [
+pub(crate) const TAROTS: [Item; 22] = [
     Item::The_Fool,
     Item::The_Magician,
     Item::The_High_Priestess,
@@ -764,7 +728,7 @@ pub const TAROTS: [Item; 22] = [
     Item::The_World,
 ];
 
-pub const PLANETS: [Item; 12] = [
+pub(crate) const PLANETS: [Item; 12] = [
     Item::Mercury,
     Item::Venus,
     Item::Earth,
@@ -779,7 +743,7 @@ pub const PLANETS: [Item; 12] = [
     Item::Eris,
 ];
 
-pub const COMMON_JOKERS_100: [Item; 60] = [
+pub(crate) const COMMON_JOKERS_100: [Item; 60] = [
     Item::Joker,
     Item::Greedy_Joker,
     Item::Lusty_Joker,
@@ -842,7 +806,7 @@ pub const COMMON_JOKERS_100: [Item; 60] = [
     Item::Shoot_the_Moon,
 ];
 
-pub const COMMON_JOKERS: [Item; 61] = [
+pub(crate) const COMMON_JOKERS: [Item; 61] = [
     Item::Joker,
     Item::Greedy_Joker,
     Item::Lusty_Joker,
@@ -906,7 +870,7 @@ pub const COMMON_JOKERS: [Item; 61] = [
     Item::Shoot_the_Moon,
 ];
 
-pub const UNCOMMON_JOKERS_100: [Item; 66] = [
+pub(crate) const UNCOMMON_JOKERS_100: [Item; 66] = [
     Item::Joker_Stencil,
     Item::Four_Fingers,
     Item::Mime,
@@ -975,7 +939,7 @@ pub const UNCOMMON_JOKERS_100: [Item; 66] = [
     Item::Bootstraps,
 ];
 
-pub const UNCOMMON_JOKERS: [Item; 64] = [
+pub(crate) const UNCOMMON_JOKERS: [Item; 64] = [
     Item::Joker_Stencil,
     Item::Four_Fingers,
     Item::Mime,
@@ -1042,7 +1006,7 @@ pub const UNCOMMON_JOKERS: [Item; 64] = [
     Item::Bootstraps,
 ];
 
-pub const RARE_JOKERS_100: [Item; 19] = [
+pub(crate) const RARE_JOKERS_100: [Item; 19] = [
     Item::DNA,
     Item::Sixth_Sense,
     Item::Seance,
@@ -1064,7 +1028,7 @@ pub const RARE_JOKERS_100: [Item; 19] = [
     Item::Drivers_License,
 ];
 
-pub const RARE_JOKERS: [Item; 20] = [
+pub(crate) const RARE_JOKERS: [Item; 20] = [
     Item::DNA,
     Item::Vagabond,
     Item::Baron,
@@ -1087,7 +1051,7 @@ pub const RARE_JOKERS: [Item; 20] = [
     Item::Burnt_Joker,
 ];
 
-pub const LEGENDARY_JOKERS: [Item; 5] = [
+pub(crate) const LEGENDARY_JOKERS: [Item; 5] = [
     Item::Canio,
     Item::Triboulet,
     Item::Yorick,
@@ -1095,7 +1059,7 @@ pub const LEGENDARY_JOKERS: [Item; 5] = [
     Item::Perkeo,
 ];
 
-pub const VOUCHERS: [Item; 32] = [
+pub(crate) const VOUCHERS: [Item; 32] = [
     Item::Overstock,
     Item::Overstock_Plus,
     Item::Clearance_Sale,
@@ -1130,7 +1094,7 @@ pub const VOUCHERS: [Item; 32] = [
     Item::Palette,
 ];
 
-pub const SPECTRALS: [Item; 18] = [
+pub(crate) const SPECTRALS: [Item; 18] = [
     Item::Familiar,
     Item::Grim,
     Item::Incantation,
@@ -1151,7 +1115,7 @@ pub const SPECTRALS: [Item; 18] = [
     Item::RETRY,
 ];
 
-pub const TAGS: [Item; 24] = [
+pub(crate) const TAGS: [Item; 24] = [
     Item::Uncommon_Tag,
     Item::Rare_Tag,
     Item::Negative_Tag,
@@ -1178,38 +1142,8 @@ pub const TAGS: [Item; 24] = [
     Item::Economy_Tag,
 ];
 
-pub const BOSSES: [Item; 28] = [
-    Item::The_Arm,
-    Item::The_Club,
-    Item::The_Eye,
-    Item::Amber_Acorn,
-    Item::Cerulean_Bell,
-    Item::Crimson_Heart,
-    Item::Verdant_Leaf,
-    Item::Violet_Vessel,
-    Item::The_Fish,
-    Item::The_Flint,
-    Item::The_Goad,
-    Item::The_Head,
-    Item::The_Hook,
-    Item::The_House,
-    Item::The_Manacle,
-    Item::The_Mark,
-    Item::The_Mouth,
-    Item::The_Needle,
-    Item::The_Ox,
-    Item::The_Pillar,
-    Item::The_Plant,
-    Item::The_Psychic,
-    Item::The_Serpent,
-    Item::The_Tooth,
-    Item::The_Wall,
-    Item::The_Water,
-    Item::The_Wheel,
-    Item::The_Window,
-];
-
-pub fn item_to_string(item: Item) -> &'static str {
+#[cfg(test)]
+pub(crate) fn item_to_string(item: Item) -> &'static str {
     match item {
         Item::RETRY => "RETRY",
         Item::J_BEGIN => "J BEGIN",
@@ -1722,7 +1656,7 @@ pub fn item_to_string(item: Item) -> &'static str {
     }
 }
 
-pub fn string_to_item(name: &str) -> Item {
+pub(crate) fn string_to_item(name: &str) -> Item {
     match name {
         "RETRY" => Item::RETRY,
         "J BEGIN" => Item::J_BEGIN,
@@ -2235,7 +2169,7 @@ pub fn string_to_item(name: &str) -> Item {
     }
 }
 
-pub fn is_joker_item(item: Item) -> bool {
+pub(crate) fn is_joker_item(item: Item) -> bool {
     item > Item::J_BEGIN
         && item < Item::J_END
         && !matches!(

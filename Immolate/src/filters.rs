@@ -21,7 +21,7 @@ const RANK_ORDER: [Item; CARDS_PER_SUIT] = [
 ];
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum JokerLocation {
+pub(crate) enum JokerLocation {
     Any,
     Shop,
     Pack,
@@ -29,20 +29,20 @@ pub enum JokerLocation {
 
 #[derive(Clone, Copy, Debug)]
 pub struct FilterConfig {
-    pub voucher: Item,
-    pub pack: Item,
-    pub tag1: Item,
-    pub tag2: Item,
-    pub joker: Item,
-    pub joker_location: JokerLocation,
-    pub souls: i64,
-    pub observatory: bool,
-    pub perkeo: bool,
-    pub deck: Item,
-    pub erratic: bool,
-    pub no_faces: bool,
-    pub min_face_cards: i32,
-    pub suit_ratio: f64,
+    pub(crate) voucher: Item,
+    pub(crate) pack: Item,
+    pub(crate) tag1: Item,
+    pub(crate) tag2: Item,
+    pub(crate) joker: Item,
+    pub(crate) joker_location: JokerLocation,
+    pub(crate) souls: i64,
+    pub(crate) observatory: bool,
+    pub(crate) perkeo: bool,
+    pub(crate) deck: Item,
+    pub(crate) erratic: bool,
+    pub(crate) no_faces: bool,
+    pub(crate) min_face_cards: i32,
+    pub(crate) suit_ratio: f64,
 }
 
 impl Default for FilterConfig {
@@ -107,7 +107,7 @@ impl FilterConfig {
     }
 }
 
-pub fn apply_filters(inst: &mut Instance, cfg: &FilterConfig) -> bool {
+pub(crate) fn apply_filters(inst: &mut Instance, cfg: &FilterConfig) -> bool {
     const ANTE: i32 = 1;
     inst.init_locks(ANTE, false, false);
     inst.set_deck(cfg.deck);
@@ -251,7 +251,7 @@ pub fn apply_filters(inst: &mut Instance, cfg: &FilterConfig) -> bool {
 }
 
 #[allow(clippy::match_same_arms)]
-pub fn parse_tag_key(key: &str) -> Item {
+fn parse_tag_key(key: &str) -> Item {
     match key {
         "" => Item::RETRY,
         "tag_uncommon" => Item::Uncommon_Tag,
@@ -282,7 +282,7 @@ pub fn parse_tag_key(key: &str) -> Item {
     }
 }
 
-pub fn parse_pack_key(key: &str) -> Item {
+fn parse_pack_key(key: &str) -> Item {
     if key.is_empty() {
         return Item::RETRY;
     }
@@ -307,7 +307,7 @@ pub fn parse_pack_key(key: &str) -> Item {
 }
 
 #[allow(clippy::match_same_arms)]
-pub fn parse_voucher_key(key: &str) -> Item {
+fn parse_voucher_key(key: &str) -> Item {
     match key {
         "" => Item::RETRY,
         "v_overstock_norm" => Item::Overstock,
@@ -347,7 +347,7 @@ pub fn parse_voucher_key(key: &str) -> Item {
 }
 
 #[allow(clippy::match_same_arms)]
-pub fn parse_deck_key(key: &str) -> Item {
+fn parse_deck_key(key: &str) -> Item {
     match key {
         "" | "b_red" => Item::Red_Deck,
         "b_blue" => Item::Blue_Deck,
@@ -369,7 +369,7 @@ pub fn parse_deck_key(key: &str) -> Item {
     }
 }
 
-pub fn parse_joker_name(name: &str) -> Item {
+fn parse_joker_name(name: &str) -> Item {
     if name.is_empty() {
         return Item::RETRY;
     }
@@ -389,7 +389,7 @@ pub fn parse_joker_name(name: &str) -> Item {
     }
 }
 
-pub fn parse_joker_location(location: &str) -> JokerLocation {
+fn parse_joker_location(location: &str) -> JokerLocation {
     match location {
         "shop" => JokerLocation::Shop,
         "pack" => JokerLocation::Pack,
@@ -397,7 +397,7 @@ pub fn parse_joker_location(location: &str) -> JokerLocation {
     }
 }
 
-pub fn normalize_pack_key(key: &str) -> String {
+fn normalize_pack_key(key: &str) -> String {
     let Some(pos) = key.rfind('_') else {
         return key.to_owned();
     };

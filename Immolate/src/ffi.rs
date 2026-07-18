@@ -11,7 +11,7 @@ use crate::filters::FilterConfig;
 static LAST_ERROR: Mutex<Option<CString>> = Mutex::new(None);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn brainstorm_search(
+pub(crate) extern "C" fn brainstorm_search(
     seed_start: *const c_char,
     voucher_key: *const c_char,
     pack_key: *const c_char,
@@ -128,10 +128,10 @@ fn brainstorm_search_impl(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn immolate_set_log_path(_path: *const c_char) {}
+pub(crate) extern "C" fn immolate_set_log_path(_path: *const c_char) {}
 
 #[unsafe(no_mangle)]
-pub extern "C" fn immolate_last_error() -> *const c_char {
+pub(crate) extern "C" fn immolate_last_error() -> *const c_char {
     LAST_ERROR
         .lock()
         .ok()
@@ -140,7 +140,7 @@ pub extern "C" fn immolate_last_error() -> *const c_char {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn free_result(result: *mut c_char) {
+pub(crate) extern "C" fn free_result(result: *mut c_char) {
     if result.is_null() {
         return;
     }

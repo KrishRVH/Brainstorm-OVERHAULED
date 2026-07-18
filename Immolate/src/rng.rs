@@ -39,7 +39,7 @@ impl LuaRandom {
         rng
     }
 
-    pub fn randint_raw(&mut self) -> u64 {
+    pub(crate) fn randint_raw(&mut self) -> u64 {
         let mut result = 0_u64;
 
         let mut z = self.state[0];
@@ -65,7 +65,7 @@ impl LuaRandom {
         result
     }
 
-    pub fn randdblmem(&mut self) -> u64 {
+    pub(crate) fn randdblmem(&mut self) -> u64 {
         (self.randint_raw() & K_DBL_MANT) | 1.0_f64.to_bits()
     }
 
@@ -73,12 +73,12 @@ impl LuaRandom {
         f64::from_bits(self.randdblmem()) - 1.0
     }
 
-    pub fn randint(&mut self, min: i32, max: i32) -> i32 {
+    pub(crate) fn randint(&mut self, min: i32, max: i32) -> i32 {
         (self.random() * f64::from(max - min + 1)) as i32 + min
     }
 }
 
-pub fn fract(x: f64) -> f64 {
+pub(crate) fn fract(x: f64) -> f64 {
     let x_int = x.to_bits();
     let expo = (x_int & K_DBL_EXPO) >> K_DBL_MANT_SIZE;
     if expo < K_DBL_EXPO_BIAS {
@@ -106,7 +106,7 @@ pub fn pseudohash(bytes: &str) -> f64 {
     pseudohash_bytes(bytes.as_bytes())
 }
 
-pub fn pseudohash_bytes(bytes: &[u8]) -> f64 {
+fn pseudohash_bytes(bytes: &[u8]) -> f64 {
     let mut num = 1.0;
     for i in (0..bytes.len()).rev() {
         let pos = i + 1;
@@ -115,11 +115,11 @@ pub fn pseudohash_bytes(bytes: &[u8]) -> f64 {
     num
 }
 
-pub fn pseudohash_from(bytes: &str, num: f64) -> f64 {
+pub(crate) fn pseudohash_from(bytes: &str, num: f64) -> f64 {
     pseudohash_from_bytes(bytes.as_bytes(), num)
 }
 
-pub fn pseudohash_from_bytes(bytes: &[u8], mut num: f64) -> f64 {
+pub(crate) fn pseudohash_from_bytes(bytes: &[u8], mut num: f64) -> f64 {
     for i in (0..bytes.len()).rev() {
         let pos = i + 1;
         num = fract(1.1239285023 / num * f64::from(bytes[i]) * PI_HASH + PI_HASH * pos as f64);
@@ -127,11 +127,11 @@ pub fn pseudohash_from_bytes(bytes: &[u8], mut num: f64) -> f64 {
     num
 }
 
-pub fn pseudostep(byte: u8, pos: usize, num: f64) -> f64 {
+pub(crate) fn pseudostep(byte: u8, pos: usize, num: f64) -> f64 {
     fract(1.1239285023 / num * f64::from(byte) * PI_HASH + PI_HASH * pos as f64)
 }
 
-pub fn ante_to_string(ante: i32) -> String {
+pub(crate) fn ante_to_string(ante: i32) -> String {
     if ante < 10 {
         return ((b'0' + ante as u8) as char).to_string();
     }
@@ -157,7 +157,7 @@ fn next_down_for_positive_hash(x: f64) -> f64 {
     }
 }
 
-pub fn round13(x: f64) -> f64 {
+pub(crate) fn round13(x: f64) -> f64 {
     const INV_PREC: f64 = 10_000_000_000_000.0;
     const TWO_INV_PREC: f64 = 8192.0;
     const FIVE_INV_PREC: f64 = 1_220_703_125.0;

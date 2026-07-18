@@ -1,16 +1,22 @@
-pub mod bench_cases;
-pub mod engine;
+#[cfg(test)]
+// The shared catalog has fields and selectors used by the benchmark binaries,
+// but the library's source-oracle tests consume only part of it.
+#[allow(dead_code)]
+mod bench_cases;
+mod engine;
 mod ffi;
-pub mod filters;
-pub mod instance;
-pub mod item;
-pub mod rng;
-pub mod search;
-pub mod seed;
+mod filters;
+mod instance;
+mod item;
+mod rng;
+mod search;
+mod seed;
 
-pub use engine::brainstorm_search_core;
-pub use filters::{FilterConfig, JokerLocation};
-pub use search::{resolve_seed_budget, resolve_threads};
+pub use engine::config::CompiledFilter;
+pub use engine::search::brainstorm_search_core;
+pub use filters::FilterConfig;
+pub use rng::{LuaRandom, pseudohash};
+pub use seed::{SEED_SPACE, Seed};
 
 #[cfg(test)]
 mod tests {
@@ -28,12 +34,14 @@ mod tests {
         is_first_shop_possible_joker, target_joker_pools,
     };
     use crate::ffi::{brainstorm_search, free_result, immolate_last_error};
+    use crate::filters::FilterConfig;
     use crate::instance::Instance;
     use crate::item::{
         COMMON_JOKERS, COMMON_JOKERS_100, Item, LEGENDARY_JOKERS, RARE_JOKERS, RARE_JOKERS_100,
         UNCOMMON_JOKERS, UNCOMMON_JOKERS_100, item_to_string,
     };
     use crate::rng::{LuaRandom, fract, pseudohash, pseudohash_from, pseudostep, round13};
+    use crate::search::resolve_seed_budget;
     use crate::seed::Seed;
 
     #[test]
@@ -189,8 +197,6 @@ mod tests {
             (RngKey::JokerLegendary, "Joker4"),
             (RngKey::SoulTarot1, "soul_Tarot1"),
             (RngKey::SoulSpectral1, "soul_Spectral1"),
-            (RngKey::TarotArcana1, "Tarotar11"),
-            (RngKey::SpectralPack1, "Spectralspe1"),
             (RngKey::Erratic, "erratic"),
         ];
         for (key, expected) in cases {

@@ -3,7 +3,7 @@ use std::fmt::Write as _;
 use crate::rng::pseudostep;
 
 pub const SEED_SPACE: i64 = 2_318_107_019_761;
-pub const SEED_CHARS: &[u8; 35] = b"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const SEED_CHARS: &[u8; 35] = b"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const ID_COEFF: [i64; 8] = [
     66_231_629_136,
     1_892_332_261,
@@ -70,7 +70,7 @@ impl Seed {
         id
     }
 
-    pub fn next(&mut self) {
+    pub(crate) fn next(&mut self) {
         if self.length < 8 {
             self.seed[self.length] = 0;
             self.length += 1;
@@ -110,7 +110,7 @@ impl Seed {
         self.pseudohash(0)
     }
 
-    pub fn pseudohash(&mut self, prefix_length: usize) -> f64 {
+    pub(crate) fn pseudohash(&mut self, prefix_length: usize) -> f64 {
         if self.length == 0 {
             return 1.0;
         }

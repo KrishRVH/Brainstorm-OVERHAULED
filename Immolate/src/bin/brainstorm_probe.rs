@@ -1,7 +1,4 @@
-use immolate::brainstorm_search_core;
-use immolate::filters::FilterConfig;
-use immolate::rng::{LuaRandom, pseudohash};
-use immolate::seed::Seed;
+use immolate::{FilterConfig, LuaRandom, Seed, brainstorm_search_core, pseudohash};
 
 struct SearchCase {
     name: &'static str,

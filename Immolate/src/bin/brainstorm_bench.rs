@@ -3,10 +3,7 @@ use std::hint::black_box;
 use std::process;
 use std::time::Instant;
 
-use immolate::brainstorm_search_core;
-use immolate::engine::config::{CompiledFilter, KernelShape};
-use immolate::filters::FilterConfig;
-use immolate::seed::{SEED_SPACE, Seed};
+use immolate::{CompiledFilter, FilterConfig, SEED_SPACE, Seed, brainstorm_search_core};
 
 #[path = "../bench_cases.rs"]
 mod bench_cases;
@@ -69,7 +66,7 @@ fn main() {
     );
     for case in cases {
         let cfg = case_config(case);
-        let no_match = CompiledFilter::compile(&cfg).shape == KernelShape::NoMatch;
+        let no_match = CompiledFilter::compile(&cfg).is_no_match();
         for repeat in 1..=args.repeat {
             let started = Instant::now();
             let result = brainstorm_search_core(case.seed_start, &cfg, args.budget, args.threads);
@@ -115,7 +112,7 @@ fn main() {
 }
 
 fn validate_case_shape(case: bench_cases::BenchCase) -> Result<(), String> {
-    let no_match = CompiledFilter::compile(&case_config(case)).shape == KernelShape::NoMatch;
+    let no_match = CompiledFilter::compile(&case_config(case)).is_no_match();
     if (case.shape == bench_cases::BenchShape::Static) == no_match {
         Ok(())
     } else {

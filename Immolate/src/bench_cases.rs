@@ -1,5 +1,5 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BenchGroup {
+pub(crate) enum BenchGroup {
     Baseline,
     Tags,
     Vouchers,
@@ -11,7 +11,7 @@ pub enum BenchGroup {
 }
 
 impl BenchGroup {
-    pub const fn key(self) -> &'static str {
+    pub(crate) const fn key(self) -> &'static str {
         match self {
             Self::Baseline => "baseline",
             Self::Tags => "tags",
@@ -24,7 +24,7 @@ impl BenchGroup {
         }
     }
 
-    pub const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::Baseline => "baseline",
             Self::Tags => "tags",
@@ -39,7 +39,7 @@ impl BenchGroup {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BenchShape {
+pub(crate) enum BenchShape {
     Hit,
     Miss,
     Mixed,
@@ -47,7 +47,7 @@ pub enum BenchShape {
 }
 
 impl BenchShape {
-    pub const fn label(self) -> &'static str {
+    pub(crate) const fn label(self) -> &'static str {
         match self {
             Self::Hit => "hit",
             Self::Miss => "miss",
@@ -58,7 +58,7 @@ impl BenchShape {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct BenchCase {
+pub(crate) struct BenchCase {
     pub name: &'static str,
     pub group: BenchGroup,
     pub shape: BenchShape,
@@ -84,7 +84,7 @@ pub struct BenchCase {
 ///
 /// # Errors
 /// Returns an error when the selector is not `all`, a known group, or an exact case name.
-pub fn selected_bench_cases(selected: &str) -> Result<Vec<BenchCase>, String> {
+pub(crate) fn selected_bench_cases(selected: &str) -> Result<Vec<BenchCase>, String> {
     let mut cases = bench_cases();
     if selected == "all" {
         return Ok(cases);
@@ -101,7 +101,7 @@ pub fn selected_bench_cases(selected: &str) -> Result<Vec<BenchCase>, String> {
     }
 }
 
-pub fn bench_group_keys() -> Vec<&'static str> {
+pub(crate) fn bench_group_keys() -> Vec<&'static str> {
     vec![
         BenchGroup::Baseline.key(),
         BenchGroup::Tags.key(),
@@ -114,7 +114,7 @@ pub fn bench_group_keys() -> Vec<&'static str> {
     ]
 }
 
-pub fn bench_cases() -> Vec<BenchCase> {
+pub(crate) fn bench_cases() -> Vec<BenchCase> {
     vec![
         BenchCase {
             name: "baseline-hit",
