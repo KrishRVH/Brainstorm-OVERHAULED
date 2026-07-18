@@ -86,6 +86,7 @@ fn legacy_empty_proves_mismatch(rust_result: &str) -> bool {
 }
 
 #[cfg(any(windows, test))]
+// Keep this selector-based so benchmark-catalog drift fails the strict gate closed.
 fn requires_strict_legacy_fixture(selected_case: &str) -> bool {
     matches!(selected_case, "all" | "baseline" | "baseline-hit")
 }
@@ -301,12 +302,6 @@ mod windows_harness {
         Original(OriginalBrainstorm),
     }
 
-    #[derive(Clone, Copy, Eq, PartialEq)]
-    enum MeasurementKind {
-        Current,
-        Legacy,
-    }
-
     impl Dll {
         fn load(path: &str) -> Result<Self, String> {
             Self::load_current(path)
@@ -349,10 +344,24 @@ mod windows_harness {
             }
         }
 
-        fn measurement_kind(&self) -> MeasurementKind {
+        fn measured_scanned_count(&self, case: &Case, result: Option<&str>) -> Result<i64, String> {
             match &self.entry {
-                DllEntry::Current(_) => MeasurementKind::Current,
-                DllEntry::Original(_) => MeasurementKind::Legacy,
+                DllEntry::Current(_) => Ok(scanned_count(case, result)),
+                DllEntry::Original(_) => {
+                    let Some(result) = result else {
+                        return Err(format!(
+                            "legacy DLL returned a null pointer during {}",
+                            case.name
+                        ));
+                    };
+                    if result.is_empty() {
+                        return Err(format!(
+                            "legacy DLL returned an ambiguous empty result during {}",
+                            case.name,
+                        ));
+                    }
+                    legacy_seed_scan_count(case.seed_start.unwrap_or(""), result)
+                },
             }
         }
 
@@ -797,8 +806,7 @@ mod windows_harness {
         let mut comparisons = Vec::with_capacity(cases.len());
         for case in &cases {
             let rust_probe = rust.run(case)?;
-            let rust_probe_scanned =
-                measured_scanned_count(rust.measurement_kind(), case, rust_probe.as_deref())?;
+            let rust_probe_scanned = rust.measured_scanned_count(case, rust_probe.as_deref())?;
             let rust_probe_result = display_result(rust_probe.as_deref()).to_owned();
             let rust_summary = measure_bench_case(
                 &rust,
@@ -987,7 +995,6 @@ mod windows_harness {
         implementation: &'static str,
         output: OutputOptions,
     ) -> Result<BenchSummary, String> {
-        let measurement_kind = dll.measurement_kind();
         run_warmups(dll, case, warmup)?;
         let mut runs: Vec<BenchRun> = Vec::with_capacity(repeat);
         for run in 1..=repeat {
@@ -1001,7 +1008,7 @@ mod windows_harness {
                     case.name,
                 ));
             }
-            let scanned = measured_scanned_count(measurement_kind, case, result.as_deref())?;
+            let scanned = dll.measured_scanned_count(case, result.as_deref())?;
             let elapsed_secs = elapsed.as_secs_f64();
             let seeds_per_sec = if scanned > 0 && elapsed_secs > 0.0 {
                 scanned as f64 / elapsed_secs
@@ -1284,29 +1291,6 @@ mod windows_harness {
 
     fn display_result(result: Option<&str>) -> &str {
         result.unwrap_or("<null>")
-    }
-
-    fn measured_scanned_count(
-        measurement_kind: MeasurementKind,
-        case: &Case,
-        result: Option<&str>,
-    ) -> Result<i64, String> {
-        if measurement_kind == MeasurementKind::Current {
-            return Ok(scanned_count(case, result));
-        }
-        let Some(result) = result else {
-            return Err(format!(
-                "legacy DLL returned a null pointer during {}",
-                case.name
-            ));
-        };
-        if result.is_empty() {
-            return Err(format!(
-                "legacy DLL returned an ambiguous empty result during {}",
-                case.name,
-            ));
-        }
-        legacy_seed_scan_count(case.seed_start.unwrap_or(""), result)
     }
 
     fn scanned_count(case: &Case, result: Option<&str>) -> i64 {
