@@ -693,11 +693,7 @@ function Brainstorm.reroll()
   G.forced_seed = G.GAME.seeded and G.GAME.pseudorandom.seed or nil
 
   local seed = G.run_setup_seed and G.setup_seed or G.forced_seed
-  local stake = (
-    G.GAME.stake
-    or G.PROFILES[G.SETTINGS.profile].MEMORY.stake
-    or 1
-  ) or 1
+  local stake = G.GAME.stake or G.PROFILES[G.SETTINGS.profile].MEMORY.stake or 1
 
   G:delete_run()
   G:start_run({ stake = stake, seed = seed, challenge = G.challenge_tab })
@@ -1042,7 +1038,7 @@ function Brainstorm.attention_text(args)
   end
 
   args.uibox_config = {
-    align = args.align or "cm",
+    align = args.align,
     offset = args.offset or { x = 0, y = 0 },
     major = major,
   }

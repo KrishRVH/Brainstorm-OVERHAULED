@@ -204,8 +204,21 @@ description = "Alias for fmt-rust-check"
 run = "mise run fmt-rust-check"
 
 [tasks.clippy-rust]
-description = "Run Rust clippy with warnings denied"
-run = "cargo clippy --manifest-path \"$IMMO_DIR/Cargo.toml\" --all-targets -- -D warnings"
+description = "Run host and Windows Rust clippy with warnings denied"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+cargo clippy --manifest-path "$IMMO_DIR/Cargo.toml" --all-targets -- -D warnings
+cargo clippy \
+  --manifest-path "$IMMO_DIR/Cargo.toml" \
+  --target "${RUST_TARGET:-x86_64-pc-windows-gnu}" \
+  --all-targets \
+  -- -D warnings
+'''
+
+[tasks.doc-rust]
+description = "Check private-item Rust documentation with warnings denied"
+run = "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path \"$IMMO_DIR/Cargo.toml\" --no-deps --document-private-items"
 
 [tasks.test-rust]
 description = "Run Rust unit tests"
@@ -436,6 +449,7 @@ run = '''
 set -euo pipefail
 mise run fmt-rust-check
 mise run clippy-rust
+mise run doc-rust
 mise run test-rust
 python3 "$IMMO_DIR/scripts/bench_current_compare.py" --self-test
 mise run check-rust-dll
@@ -466,7 +480,7 @@ smoke_bench ux-tag-soul-pack 20000
 '''
 
 [tasks.check]
-description = "Run Lua lint plus the Rust DLL validation gate"
+description = "Run Lua lint, lifecycle smoke, and the Rust DLL validation gate"
 shell = "bash -c"
 run = '''
 set -euo pipefail
@@ -516,12 +530,13 @@ mise run check-version
 '''
 
 [tasks.lint-rust]
-description = "Check Rust formatting and clippy"
+description = "Check Rust formatting, host and Windows clippy, and documentation"
 shell = "bash -c"
 run = '''
 set -euo pipefail
-cargo fmt --manifest-path "$IMMO_DIR/Cargo.toml" --check
-cargo clippy --manifest-path "$IMMO_DIR/Cargo.toml" --all-targets -- -D warnings
+mise run fmt-rust-check
+mise run clippy-rust
+mise run doc-rust
 '''
 
 [tasks.lint]

@@ -889,7 +889,7 @@ mod windows_harness {
                 }
             }
             if settings.output.format == OutputFormat::Tsv {
-                print_tsv_compare(&comparison, min_ratio);
+                print_original_tsv_compare(&comparison, min_ratio);
             }
             comparisons.push(comparison);
         }
@@ -1853,10 +1853,6 @@ mod windows_harness {
         );
     }
 
-    fn print_tsv_compare(comparison: &BenchComparison, min_ratio: f64) {
-        print_original_tsv_compare(comparison, min_ratio);
-    }
-
     fn print_tsv_ratio(
         relation: &str,
         lhs: &BenchSummary,
@@ -1959,7 +1955,7 @@ mod windows_harness {
 
     fn format_integer(value: i64) -> String {
         let negative = value < 0;
-        let mut chars: Vec<_> = value.abs().to_string().chars().rev().collect();
+        let chars: Vec<_> = value.abs().to_string().chars().rev().collect();
         let mut out = String::new();
         for idx in 0..chars.len() {
             if idx > 0 && idx % 3 == 0 {
@@ -1970,7 +1966,6 @@ mod windows_harness {
         if negative {
             out.push('-');
         }
-        chars.clear();
         out.chars().rev().collect()
     }
 

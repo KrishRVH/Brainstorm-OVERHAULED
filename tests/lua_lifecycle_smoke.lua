@@ -198,9 +198,11 @@ local status = Brainstorm.attention_text({
   scale = 1.4,
   ref_table = Brainstorm,
   ref_value = "ar_status_text",
+  emboss = false,
   major = G.play,
 })
 assert(#queued_events == 1 and not status.cancelled)
+assert(status.emboss == nil)
 assert(queued_events[1].func())
 assert(status.AT and captured_uibox)
 local text_config = captured_uibox.definition.nodes[1].config

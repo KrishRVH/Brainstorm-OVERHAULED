@@ -10,8 +10,6 @@ license-file = "../LICENSE"
 name = "immolate"
 crate-type = ["cdylib", "rlib"]
 
-[dependencies]
-
 [features]
 default = []
 

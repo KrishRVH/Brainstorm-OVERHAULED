@@ -189,6 +189,7 @@ local function rebuild_joker_options()
     return a < b
   end)
 end
+
 local spf_list = Brainstorm.SPF_LIST
 local spf_keys = Brainstorm.SPF_KEYS
 
@@ -637,7 +638,7 @@ function Brainstorm.build_settings_tab()
                   + 1,
               }),
               create_option_cycle({
-                label = "ED: Suit Ratio ",
+                label = "ED: Suit Ratio",
                 scale = 0.8,
                 w = 4,
                 options = ratio_keys,

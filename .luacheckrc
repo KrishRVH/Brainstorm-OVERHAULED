@@ -2,11 +2,9 @@
 globals = {
     "Brainstorm",
     "G",
-    "SMODS",
     "STR_PACK",
     "STR_UNPACK",
     "Controller",
-    "DynaText",
     "Event",
     "Game",
     "Particles",
@@ -21,22 +19,13 @@ globals = {
     "darken",
     "get_compressed",
     "lighten",
-    "lovely",
-    "nfs",
     "number_format",
     "play_sound",
-    "pseudorandom",
-    "pseudorandom_element",
-    "pseudoseed",
-    "random_string",
-    "sendDebugMessage"
+    "random_string"
 }
 
--- Standard library extensions and LuaJIT FFI
+-- LOVE runtime
 read_globals = {
-    "bit",
-    "ffi",
-    "jit",
     "love"
 }
 
@@ -49,16 +38,18 @@ ignore = {
     "612", -- trailing whitespace in string
     "613", -- trailing whitespace in comment
     "614", -- trailing whitespace in empty line
-    "631", -- long FFI signatures and UI literals
 }
 
--- Max line length (matching stylua config)
-max_line_length = 120
+-- Cap ordinary code without rejecting required FFI strings or metadata comments.
+max_line_length = false
+max_code_line_length = 120
+max_string_line_length = false
+max_comment_line_length = false
 
 -- Cyclomatic complexity threshold
 max_cyclomatic_complexity = 30
 
--- Allow unused args with underscore prefix
+-- Balatro callbacks include intentionally unused parameters.
 unused_args = false
 unused_secondaries = false
 self = false
@@ -66,11 +57,6 @@ self = false
 -- Exclude the untracked game source.
 exclude_files = {
     "BalatroSource/**"
-}
-
-files["UI.lua"] = {
-    -- UI code often has deeply nested callbacks
-    max_cyclomatic_complexity = 30
 }
 
 -- Allow certain patterns
