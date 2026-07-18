@@ -843,6 +843,13 @@ Primary sources: all files listed above.
   exact concrete booster variants, scans two shop Joker slots even when source
   shop size could be larger, and treats `observatory` as a Telescope plus Mega
   Celestial availability filter.
+- Vanilla `get_pack()` accumulates all 32 order-sorted booster-center weights,
+  producing the binary64 total `22.420000000000005`; the shipped native
+  family model accumulates 15 grouped weights and uses `22.42`. This changes
+  five family cutoffs by one 52-bit RNG mantissa each. Preserve the grouped
+  native behavior during optimization unless an explicit model/UI contract
+  change expands source parity. Sources: `game.lua` (`P_CENTERS` boosters);
+  `functions/common_events.lua` (`get_pack`); current Rust implementation.
 - Beyond its hard-coded ante, deck, and first-shop locks, native search does not
   receive per-profile unlock/discovery state. Its static pools therefore assume
   relevant profile gates are satisfied, while source `get_current_pool()` also
