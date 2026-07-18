@@ -66,7 +66,7 @@ impl LuaRandom {
     }
 
     pub fn randdblmem(&mut self) -> u64 {
-        (self.randint_raw() & 4_503_599_627_370_495_u64) | 4_607_182_418_800_017_408_u64
+        (self.randint_raw() & K_DBL_MANT) | 1.0_f64.to_bits()
     }
 
     pub fn random(&mut self) -> f64 {

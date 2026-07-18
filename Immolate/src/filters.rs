@@ -67,6 +67,7 @@ impl Default for FilterConfig {
 }
 
 impl FilterConfig {
+    #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
     pub fn from_raw(
         voucher: &str,
         pack: &str,
@@ -249,6 +250,7 @@ pub fn apply_filters(inst: &mut Instance, cfg: &FilterConfig) -> bool {
     passes_erratic_filters(inst, cfg)
 }
 
+#[allow(clippy::match_same_arms)]
 pub fn parse_tag_key(key: &str) -> Item {
     match key {
         "" => Item::RETRY,
@@ -304,6 +306,7 @@ pub fn parse_pack_key(key: &str) -> Item {
     }
 }
 
+#[allow(clippy::match_same_arms)]
 pub fn parse_voucher_key(key: &str) -> Item {
     match key {
         "" => Item::RETRY,
@@ -343,6 +346,7 @@ pub fn parse_voucher_key(key: &str) -> Item {
     }
 }
 
+#[allow(clippy::match_same_arms)]
 pub fn parse_deck_key(key: &str) -> Item {
     match key {
         "" | "b_red" => Item::Red_Deck,
@@ -370,8 +374,7 @@ pub fn parse_joker_name(name: &str) -> Item {
         return Item::RETRY;
     }
     let item = match name {
-        "j_caino" | "j_canio" => Item::Canio,
-        "Caino" | "Canio" => Item::Canio,
+        "j_caino" | "j_canio" | "Caino" | "Canio" => Item::Canio,
         "j_seance" | "Seance" => Item::Seance,
         _ => Item::RETRY,
     };

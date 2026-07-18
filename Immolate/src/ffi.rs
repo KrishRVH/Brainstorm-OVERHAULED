@@ -70,6 +70,7 @@ pub extern "C" fn brainstorm_search(
     }
 }
 
+#[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
 fn brainstorm_search_impl(
     seed_start: *const c_char,
     voucher_key: *const c_char,
@@ -143,6 +144,7 @@ pub extern "C" fn free_result(result: *mut c_char) {
     if result.is_null() {
         return;
     }
+    // SAFETY: non-null results come from this DLL's `CString::into_raw` export path.
     unsafe {
         drop(CString::from_raw(result));
     }
@@ -152,6 +154,7 @@ fn c_string_lossy(ptr: *const c_char) -> String {
     if ptr.is_null() {
         return String::new();
     }
+    // SAFETY: callers provide a live NUL-terminated C string for every non-null argument.
     unsafe { CStr::from_ptr(ptr).to_string_lossy().into_owned() }
 }
 

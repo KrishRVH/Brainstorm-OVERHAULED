@@ -70,8 +70,7 @@ impl CompiledFilter {
 
     pub const fn chunk_size(&self) -> i64 {
         match self.shape {
-            KernelShape::Erratic => 512,
-            KernelShape::Composite => 512,
+            KernelShape::Erratic | KernelShape::Composite => 512,
             // Expensive and long-tail workflows benefit from finer participation and cancellation.
             KernelShape::SpectralSoulPerkeo
             | KernelShape::VoucherSecondPack

@@ -1,5 +1,3 @@
-#![allow(clippy::missing_errors_doc)]
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BenchGroup {
     Baseline,
@@ -82,6 +80,10 @@ pub struct BenchCase {
     pub suit_ratio: f64,
 }
 
+/// Selects benchmark cases by exact name or group.
+///
+/// # Errors
+/// Returns an error when the selector is not `all`, a known group, or an exact case name.
 pub fn selected_bench_cases(selected: &str) -> Result<Vec<BenchCase>, String> {
     let mut cases = bench_cases();
     if selected == "all" {

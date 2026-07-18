@@ -1,32 +1,10 @@
-# Build artifacts
-*.o
-*.obj
+# Staged native artifact
 *.dll
-*.so
-*.dylib
-*.exe
-*.lib
-*.a
-*.pdb
-*.ilk
-*.exp
 !Immolate/Immolate-OceanRamenandMathIsFun0.dll
 
-# Build directories
-build/
-Debug/
-Release/
+# Generated output
 target/
 release/
-x64/
-x86/
-.vs/
-*.user
-*.suo
-Immolate/build/
-
-# Tools directory (generated)
-tools/
 
 # Profiling results
 profiling_results/
@@ -42,6 +20,9 @@ profiling_results/
 # IDE files
 .vscode/
 .idea/
+.vs/
+*.suo
+*.user
 *.swp
 *.swo
 
@@ -53,24 +34,15 @@ desktop.ini
 # WSL/Windows interop
 *.exe.stackdump
 
-# Config overrides (user-specific)
+# Runtime config (user-specific)
 config.lua
-config_override.lua
-local_config.lua
 
 # Python (for any test scripts)
 __pycache__/
 *.pyc
 *.pyo
 
-# Documentation build
-docs/_build/
-*.pdf
-
 # Extracted game files (copyright)
-BalatroSource/extracted/
-BalatroSource/*.exe
-BalatroSource/*.dll
 BalatroSource/
 
 # User save states
@@ -78,5 +50,3 @@ save_state_*.jkr
 
 # Package files
 *.zip
-*.tar.gz
-*.rar

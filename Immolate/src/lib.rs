@@ -1,5 +1,3 @@
-#![allow(clippy::too_many_arguments)]
-
 pub mod bench_cases;
 pub mod engine;
 mod ffi;
@@ -16,11 +14,11 @@ pub use search::{resolve_seed_budget, resolve_threads};
 
 #[cfg(test)]
 mod tests {
-    #![allow(unsafe_code)]
+    #![allow(clippy::expect_used, unsafe_code)]
 
-    use super::*;
     use std::ffi::{CStr, CString};
 
+    use super::*;
     use crate::engine::config::CompiledFilter;
     use crate::engine::kernels::apply_compiled_filter;
     use crate::engine::rng::RngKey;
@@ -1810,6 +1808,7 @@ mod tests {
             1,
         );
         assert!(!one_result.is_null());
+        // SAFETY: `brainstorm_search` returned this pointer and it is non-null.
         let result = unsafe { CStr::from_ptr(one_result) }
             .to_string_lossy()
             .into_owned();
@@ -1819,6 +1818,7 @@ mod tests {
         assert!(immolate_last_error().is_null());
     }
 
+    #[allow(clippy::fn_params_excessive_bools, clippy::too_many_arguments)]
     fn raw_cfg(
         voucher: &str,
         pack: &str,

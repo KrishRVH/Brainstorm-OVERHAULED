@@ -103,8 +103,8 @@ BENCH_FORMAT=tsv BENCH_COLOR=never \
 
 ## Requirements
 
-Use `mise run setup` for mise-managed tools plus local Lua lint tooling, then
-`mise run doctor` to check the system dependencies.
+`mise run setup` installs the Windows Rust target and local Lua lint tooling,
+then runs `mise run doctor` to check the system dependencies.
 
 - Rust with the Windows GNU target:
   `rustup target add x86_64-pc-windows-gnu`

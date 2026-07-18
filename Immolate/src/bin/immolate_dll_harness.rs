@@ -1,4 +1,4 @@
-#![allow(unsafe_code)]
+#![allow(clippy::expect_used, unsafe_code)]
 
 #[cfg(not(windows))]
 fn main() {
@@ -879,14 +879,15 @@ mod windows_harness {
             {
                 failed = true;
             }
-            if let Some(original) = comparison.original.as_ref() {
-                if fail_on_mismatch && comparison.rust.result != original.result {
-                    failed = true;
-                    eprintln!(
-                        "benchmark parity mismatch in {}: rust={} original={}",
-                        comparison.rust.case_name, comparison.rust.result, original.result
-                    );
-                }
+            if let Some(original) = comparison.original.as_ref()
+                && fail_on_mismatch
+                && comparison.rust.result != original.result
+            {
+                failed = true;
+                eprintln!(
+                    "benchmark parity mismatch in {}: rust={} original={}",
+                    comparison.rust.case_name, comparison.rust.result, original.result
+                );
             }
             if settings.output.format == OutputFormat::Tsv {
                 print_original_tsv_compare(&comparison, min_ratio);
@@ -1021,13 +1022,13 @@ mod windows_harness {
                 0.0
             };
             let result = display_result(result.as_deref()).to_owned();
-            if let Some(first) = runs.first() {
-                if first.scanned != scanned || first.result != result {
-                    return Err(format!(
-                        "{} changed result during {implementation}: first={}/{}, run {run}={result}/{scanned}",
-                        case.name, first.result, first.scanned,
-                    ));
-                }
+            if let Some(first) = runs.first()
+                && (first.scanned != scanned || first.result != result)
+            {
+                return Err(format!(
+                    "{} changed result during {implementation}: first={}/{}, run {run}={result}/{scanned}",
+                    case.name, first.result, first.scanned,
+                ));
             }
             let bench_run = BenchRun {
                 run,
@@ -1957,11 +1958,11 @@ mod windows_harness {
         let negative = value < 0;
         let chars: Vec<_> = value.abs().to_string().chars().rev().collect();
         let mut out = String::new();
-        for idx in 0..chars.len() {
+        for (idx, ch) in chars.iter().enumerate() {
             if idx > 0 && idx % 3 == 0 {
                 out.push(',');
             }
-            out.push(chars[idx]);
+            out.push(*ch);
         }
         if negative {
             out.push('-');

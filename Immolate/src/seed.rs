@@ -1,5 +1,6 @@
-use crate::rng::pseudostep;
 use std::fmt::Write as _;
+
+use crate::rng::pseudostep;
 
 pub const SEED_SPACE: i64 = 2_318_107_019_761;
 pub const SEED_CHARS: &[u8; 35] = b"123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";

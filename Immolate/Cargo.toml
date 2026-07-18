@@ -10,9 +10,6 @@ license-file = "../LICENSE"
 name = "immolate"
 crate-type = ["cdylib", "rlib"]
 
-[features]
-default = []
-
 # Practical strict-by-default linting baseline.
 [lints.rust]
 missing_docs = "allow"
@@ -31,7 +28,6 @@ suspicious = { level = "deny", priority = -1 }
 
 # Numeric casts are common at system and boundary layers. Tighten per project
 # when conversions need stronger guarantees.
-cast_lossless = "allow"
 cast_possible_truncation = "allow"
 cast_possible_wrap = "allow"
 cast_precision_loss = "allow"
@@ -46,33 +42,17 @@ unwrap_used = "warn"
 
 # Commonly noisy pedantic lints. Tighten these per project when they add signal.
 cognitive_complexity = "allow"
-collapsible_if = "allow"
-decimal_bitwise_operands = "allow"
-derive_partial_eq_without_eq = "allow"
-doc_markdown = "allow"
-enum_variant_names = "allow"
-excessive_nesting = "allow"
-expect_used = "allow"
-fn_params_excessive_bools = "allow"
-match_same_arms = "allow"
-match_wildcard_for_single_variants = "allow"
-map_unwrap_or = "allow"
 manual_midpoint = "allow"
+match_wildcard_for_single_variants = "allow"
 missing_const_for_fn = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 needless_range_loop = "allow"
 needless_pass_by_value = "allow"
-only_used_in_recursion = "allow"
-option_if_let_else = "allow"
 should_implement_trait = "allow"
 struct_excessive_bools = "allow"
 struct_field_names = "allow"
 too_many_lines = "allow"
-uninlined_format_args = "allow"
-unnecessary_wraps = "allow"
-use_self = "allow"
-wildcard_imports = "allow"
 
 # The RNG and seed code preserves Lua/Balatro behavior exactly. These lints
 # suggest cleaner Rust but can change floating-point rounding or obscure

@@ -199,10 +199,6 @@ cargo build \
 description = "Check Rust formatting"
 run = "cargo fmt --manifest-path \"$IMMO_DIR/Cargo.toml\" --check"
 
-[tasks.format-rust-check]
-description = "Alias for fmt-rust-check"
-run = "mise run fmt-rust-check"
-
 [tasks.clippy-rust]
 description = "Run host and Windows Rust clippy with warnings denied"
 shell = "bash -c"
@@ -217,8 +213,20 @@ cargo clippy \
 '''
 
 [tasks.doc-rust]
-description = "Check private-item Rust documentation with warnings denied"
-run = "RUSTDOCFLAGS='-D warnings' cargo doc --manifest-path \"$IMMO_DIR/Cargo.toml\" --no-deps --document-private-items"
+description = "Check host and Windows private-item Rust documentation with warnings denied"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+RUSTDOCFLAGS='-D warnings' cargo doc \
+  --manifest-path "$IMMO_DIR/Cargo.toml" \
+  --no-deps \
+  --document-private-items
+RUSTDOCFLAGS='-D warnings' cargo doc \
+  --manifest-path "$IMMO_DIR/Cargo.toml" \
+  --target "${RUST_TARGET:-x86_64-pc-windows-gnu}" \
+  --no-deps \
+  --document-private-items
+'''
 
 [tasks.test-rust]
 description = "Run Rust unit tests"
@@ -331,10 +339,6 @@ wine "$harness" bench-compare \
   --format "$bench_format" \
   --color "$bench_color"
 '''
-
-[tasks.bench-original]
-description = "Alias for bench-compare"
-run = "mise run bench-compare"
 
 [tasks.bench-current-compare]
 description = "Counterbalanced current-ABI DLL regression comparison"
@@ -503,10 +507,6 @@ stylua "${lua_files[@]}"
 cargo fmt --manifest-path "$IMMO_DIR/Cargo.toml"
 '''
 
-[tasks.fmt]
-description = "Alias for format"
-run = "mise run format"
-
 [tasks.lint-lua]
 description = "Check Lua formatting, bytecode syntax, luacheck, and version metadata"
 shell = "bash -c"
@@ -530,7 +530,7 @@ mise run check-version
 '''
 
 [tasks.lint-rust]
-description = "Check Rust formatting, host and Windows clippy, and documentation"
+description = "Check Rust formatting plus host and Windows clippy and documentation"
 shell = "bash -c"
 run = '''
 set -euo pipefail
