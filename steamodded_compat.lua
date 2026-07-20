@@ -1,0 +1,7 @@
+--- STEAMODDED HEADER
+--- MOD_NAME: Brainstorm OVERHAULED
+--- MOD_ID: Brainstorm
+--- PREFIX: brainstorm
+--- MOD_AUTHOR: [OceanRamen, KRVH]
+--- MOD_DESCRIPTION: Brainstorm OVERHAULED, the Balatro Reroll Mod. KRVH's full rewrite of OceanRamen's original Brainstorm. Hex is KRVH's Rust rewrite of the core seed-search engine from MathIsFun0's original Immolate, source-verified against Balatro and extended for Brainstorm. Experimental CUDA acceleration with automatic CPU fallback.
+--- VERSION: 4.0.3

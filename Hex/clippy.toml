@@ -1,0 +1,8 @@
+# Warn on large enum variants
+enum-variant-size-threshold = 200
+
+# Single char binding names threshold
+single-char-binding-names-threshold = 5
+
+# Set the maximum number of arguments for functions
+too-many-arguments-threshold = 7

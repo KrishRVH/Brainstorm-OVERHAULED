@@ -1,0 +1,44 @@
+# Native binaries; retain the historical comparison baseline
+*.dll
+!Hex/Original-Immolate-OceanRamenandMathIsFun0.dll
+
+# Generated output
+target/
+release/
+
+# Temporary files and logs
+*.bak
+*.backup
+*.log
+*.temp
+*.tmp
+*~
+
+# IDE files
+.idea/
+.vs/
+.vscode/
+*.suo
+*.swo
+*.swp
+*.user
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# WSL/Windows interop
+*.exe.stackdump
+
+# Runtime config (user-specific)
+config.lua
+
+# Extracted game files (copyright)
+BalatroSource/
+
+# User save states
+save_state_*.jkr
+
+# Package files
+*.zip

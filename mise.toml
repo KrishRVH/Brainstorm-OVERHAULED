@@ -1,0 +1,1042 @@
+[env]
+HEX_DIR = "Hex"
+DLL = "Hex.dll"
+TARGET_DIR = "target"
+
+[tasks.default]
+description = "List available Brainstorm OVERHAULED tasks"
+run = "mise tasks ls"
+
+[tasks.setup]
+description = "Check required tools and install local Lua lint tools"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+rustup target add "${RUST_TARGET:-x86_64-pc-windows-gnu}"
+mise run setup-lua
+mise run doctor
+'''
+
+[tasks.setup-lua]
+description = "Install local Lua lint tools through LuaRocks"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+if ! command -v luajit >/dev/null; then
+  echo "luajit not found. Install LuaJIT with your OS package manager."
+  exit 1
+fi
+if ! command -v luarocks >/dev/null; then
+  echo "luarocks not found. Install LuaRocks with your OS package manager."
+  exit 1
+fi
+
+export PATH="$HOME/.luarocks/bin:$PATH"
+luacheck_rock="1.2.0-1"
+if ! luarocks --local show luacheck "$luacheck_rock" >/dev/null 2>&1; then
+  luarocks --local install luacheck "$luacheck_rock"
+fi
+luacheck_version="$(luacheck --version | sed -n '1p')"
+[ "$luacheck_version" = "Luacheck: 1.2.0" ] || {
+  echo "expected Luacheck 1.2.0, found: $luacheck_version"
+  exit 1
+}
+printf '%s\n' "$luacheck_version"
+'''
+
+[tasks.doctor]
+description = "Check required system and local development tools"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+export PATH="$HOME/.luarocks/bin:$PATH"
+missing=0
+check_cmd() {
+  if ! command -v "$1" >/dev/null; then
+    echo "missing: $1"
+    missing=1
+  else
+    echo "ok: $1"
+  fi
+}
+
+check_cmd rustup
+check_cmd cargo
+check_cmd stylua
+check_cmd luajit
+check_cmd luarocks
+check_cmd luacheck
+check_cmd x86_64-w64-mingw32-gcc
+check_cmd x86_64-w64-mingw32-objdump
+check_cmd wine
+if [ "${BRAINSTORM_SKIP_CUDA_BUILD:-0}" = "1" ]; then
+  echo "skipped: nvcc (BRAINSTORM_SKIP_CUDA_BUILD=1)"
+else
+  check_cmd "${NVCC:-nvcc}"
+  check_cmd "${CUOBJDUMP:-cuobjdump}"
+  check_cmd "${CUDAHOSTCXX:-gcc-12}"
+fi
+check_cmd file
+check_cmd sha256sum
+check_cmd unzip
+check_cmd zip
+check_cmd rsync
+
+powershell="${POWERSHELL_EXE:-powershell.exe}"
+if ! command -v "$powershell" >/dev/null; then
+  powershell="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+fi
+if command -v wslpath >/dev/null \
+  && command -v cmd.exe >/dev/null \
+  && command -v "$powershell" >/dev/null; then
+  echo "ok: native Windows benchmark interop"
+else
+  echo "optional: wslpath/cmd.exe/powershell.exe unavailable; use BENCH_EXECUTOR=wine for diagnostics"
+fi
+
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+if ! rustup target list --installed | grep -qx "$rust_target"; then
+  echo "missing Rust target: $rust_target"
+  missing=1
+else
+  echo "ok: Rust target $rust_target"
+fi
+
+exit "$missing"
+'''
+
+[tasks.version]
+description = "Print the canonical mod version"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1
+'''
+
+[tasks.check-version]
+description = "Verify release/package version metadata is in sync"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+version_number="$(sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1)"
+compat_version="$(sed -n 's/^--- VERSION:[[:space:]]*//p' steamodded_compat.lua | head -n1)"
+cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$HEX_DIR/Cargo.toml" | head -n1)"
+cargo_lock_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$HEX_DIR/Cargo.lock" | head -n1)"
+readme_version="$(sed -n 's/^Current release: \*\*v\([^*]*\)\*\*\.$/\1/p' README.md | head -n1)"
+
+[ -n "$version_number" ] || {
+  echo "lovely.toml manifest version is missing"
+  exit 1
+}
+if ! printf '%s\n' "$version_number" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+  echo "lovely.toml version is not canonical MAJOR.MINOR.PATCH SemVer: $version_number"
+  exit 1
+fi
+[ "$compat_version" = "$version_number" ] || {
+  echo "steamodded_compat.lua VERSION is $compat_version but lovely.toml is $version_number"
+  exit 1
+}
+[ "$cargo_version" = "$version_number" ] || {
+  echo "$HEX_DIR/Cargo.toml version is $cargo_version but lovely.toml is $version_number"
+  exit 1
+}
+[ "$cargo_lock_version" = "$cargo_version" ] || {
+  echo "$HEX_DIR/Cargo.lock version is $cargo_lock_version but $HEX_DIR/Cargo.toml is $cargo_version"
+  exit 1
+}
+[ "$readme_version" = "$version_number" ] || {
+  echo "README.md current release is $readme_version but lovely.toml is $version_number"
+  exit 1
+}
+
+echo "version ok: $version_number"
+'''
+
+[tasks.bump-version]
+description = "Synchronize release version metadata. Usage: VERSION=<VERSION> mise run bump-version"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+new_version="${VERSION:-}"
+if [ -z "$new_version" ]; then
+  echo "Set VERSION, for example: VERSION=4.0.1 mise run bump-version"
+  exit 1
+fi
+if ! printf '%s\n' "$new_version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+  echo "Invalid VERSION: $new_version (expected MAJOR.MINOR.PATCH)"
+  exit 1
+fi
+
+sed -i -E "0,/^version = \".*\"/s//version = \"$new_version\"/" lovely.toml
+sed -i -E "s/^(--- VERSION:[[:space:]]*).*/\\1$new_version/" steamodded_compat.lua
+sed -i -E "0,/^version = \".*\"/s//version = \"$new_version\"/" "$HEX_DIR/Cargo.toml"
+sed -i -E "0,/^version = \".*\"/s//version = \"$new_version\"/" "$HEX_DIR/Cargo.lock"
+sed -i -E "s/^(Current release: \\*\\*v)[^*]+(\\*\\*\\.)$/\\1$new_version\\2/" README.md
+mise run check-version
+'''
+
+[tasks.build]
+description = "Build the Rust Hex.dll artifact"
+run = "mise run build-rust"
+
+[tasks.build-rust]
+description = "Build the Rust DLL and copy it to target/rust"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+rust_dll="$HEX_DIR/target/$rust_target/release/hex.dll"
+rust_artifact_dir="$TARGET_DIR/rust"
+
+echo "Building Rust $DLL" >&2
+if ! rustup target list --installed | grep -qx "$rust_target"; then
+  echo "Rust target $rust_target not installed. Run: rustup target add $rust_target"
+  exit 1
+fi
+
+cargo build --manifest-path "$HEX_DIR/Cargo.toml" --release --target "$rust_target"
+mkdir -p "$rust_artifact_dir"
+cp "$rust_dll" "$rust_artifact_dir/$DLL"
+'''
+
+[tasks.attest-cuda-module]
+description = "Verify the embedded CUDA fat binary architecture set"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+module_root="$HEX_DIR/target/$rust_target/release/build"
+module="$({
+  find "$module_root" -path '*/out/brainstorm_cuda.fatbin' -type f -printf '%T@ %p\n' 2>/dev/null || true
+} | sort -nr | sed -n '1s/^[^ ]* //p')"
+
+[ -n "$module" ] || { echo "compiled CUDA module not found under $module_root"; exit 1; }
+if [ "${BRAINSTORM_SKIP_CUDA_BUILD:-0}" = "1" ]; then
+  [ ! -s "$module" ] || { echo "CPU-only build unexpectedly contains a CUDA module"; exit 1; }
+  echo "CUDA module intentionally omitted"
+  exit 0
+fi
+
+cuobjdump="${CUOBJDUMP:-cuobjdump}"
+command -v "$cuobjdump" >/dev/null || { echo "cuobjdump not found: $cuobjdump"; exit 1; }
+elf_listing="$("$cuobjdump" --list-elf "$module")"
+ptx_listing="$("$cuobjdump" --list-ptx "$module")"
+production_arches="50,52,60,61,70,75,80,86,89,90"
+production_ptx_arch="89"
+arches="${BRAINSTORM_CUDA_ARCHES:-$production_arches}"
+ptx_arch="${BRAINSTORM_CUDA_PTX_ARCH:-$production_ptx_arch}"
+if [ "${BRAINSTORM_CUDA_PRODUCTION:-0}" = "1" ]; then
+  [ "$arches" = "$production_arches" ] || {
+    echo "production CUDA architectures must be $production_arches"
+    exit 1
+  }
+  [ "$ptx_arch" = "$production_ptx_arch" ] || {
+    echo "production CUDA PTX architecture must be $production_ptx_arch"
+    exit 1
+  }
+fi
+IFS=',' read -r -a arch_list <<< "$arches"
+expected_count=0
+for arch in "${arch_list[@]}"; do
+  expected_count=$((expected_count + 1))
+  [[ "$elf_listing" == *".sm_${arch}.cubin"* ]] || {
+    echo "missing native CUDA image for sm_$arch"
+    exit 1
+  }
+done
+[ "$(printf '%s\n' "$elf_listing" | grep -c '^ELF file')" -eq "$expected_count" ] || {
+  echo "unexpected native CUDA image set:"
+  printf '%s\n' "$elf_listing"
+  exit 1
+}
+[[ "$ptx_listing" == *".sm_${ptx_arch}.ptx"* ]] || {
+  echo "missing PTX fallback for compute_$ptx_arch"
+  exit 1
+}
+[ "$(printf '%s\n' "$ptx_listing" | grep -c '^PTX file')" -eq 1 ] || {
+  echo "unexpected PTX fallback set:"
+  printf '%s\n' "$ptx_listing"
+  exit 1
+}
+elf_symbols="$("$cuobjdump" --dump-elf-symbols "$module")"
+ptx_code="$("$cuobjdump" --dump-ptx "$module")"
+[ "$(printf '%s\n' "$ptx_code" | grep -c "^\\.target sm_${ptx_arch}$")" -eq 1 ] || {
+  echo "PTX target mismatch for compute_$ptx_arch"
+  exit 1
+}
+for kernel in brainstorm_search_kernel brainstorm_search_spectral_soul_kernel; do
+  [ "$(printf '%s\n' "$elf_symbols" | grep -c "STO_ENTRY[[:space:]]*$kernel$")" -eq "$expected_count" ] || {
+    echo "native CUDA symbol count mismatch for $kernel"
+    exit 1
+  }
+  [ "$(printf '%s\n' "$ptx_code" | grep -c "\\.entry $kernel(")" -eq 1 ] || {
+    echo "PTX CUDA symbol count mismatch for $kernel"
+    exit 1
+  }
+done
+echo "CUDA module ok: ${arch_list[*]} + compute_$ptx_arch PTX"
+'''
+
+[tasks.build-harness]
+description = "Build the Windows DLL harness"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+echo "Building Rust DLL harness" >&2
+if ! rustup target list --installed | grep -qx "$rust_target"; then
+  echo "Rust target $rust_target not installed. Run: rustup target add $rust_target"
+  exit 1
+fi
+
+cargo build \
+  --manifest-path "$HEX_DIR/Cargo.toml" \
+  --release \
+  --target "$rust_target" \
+  --bin hex_dll_harness
+'''
+
+[tasks.fmt-rust-check]
+description = "Check Rust formatting"
+run = "cargo fmt --manifest-path \"$HEX_DIR/Cargo.toml\" --check"
+
+[tasks.clippy-rust]
+description = "Run host and Windows Rust clippy with warnings denied"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+cargo clippy --manifest-path "$HEX_DIR/Cargo.toml" --all-targets -- -D warnings
+cargo clippy \
+  --manifest-path "$HEX_DIR/Cargo.toml" \
+  --target "${RUST_TARGET:-x86_64-pc-windows-gnu}" \
+  --all-targets \
+  -- -D warnings
+'''
+
+[tasks.doc-rust]
+description = "Check host and Windows private-item Rust documentation with warnings denied"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+RUSTDOCFLAGS='-D warnings' cargo doc \
+  --manifest-path "$HEX_DIR/Cargo.toml" \
+  --no-deps \
+  --document-private-items
+RUSTDOCFLAGS='-D warnings' cargo doc \
+  --manifest-path "$HEX_DIR/Cargo.toml" \
+  --target "${RUST_TARGET:-x86_64-pc-windows-gnu}" \
+  --no-deps \
+  --document-private-items
+'''
+
+[tasks.test-rust]
+description = "Run Rust unit tests"
+run = "cargo test --manifest-path \"$HEX_DIR/Cargo.toml\""
+
+[tasks.check-rust-dll]
+description = "Validate Rust DLL exports and runtime imports"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run build-rust
+mise run attest-cuda-module
+
+rust_artifact="$TARGET_DIR/rust/$DLL"
+file "$rust_artifact" | grep -Eq 'PE32\+.*x86-64' || {
+  file "$rust_artifact"
+  exit 1
+}
+
+exports="$(
+  x86_64-w64-mingw32-objdump -p "$rust_artifact" |
+    sed -n '/^\[Ordinal\/Name Pointer\] Table/,/^$/p' |
+    awk '/\[[[:space:]]*[0-9]+\]/{print $NF}'
+)"
+expected="$(printf '%s\n' brainstorm_search free_result hex_last_search_used_cuda hex_set_cuda_enabled hex_set_log_path | sort)"
+actual="$(printf '%s\n' "$exports" | sort)"
+if [ "$actual" != "$expected" ]; then
+  echo "unexpected Rust DLL exports:"
+  printf '%s\n' "$exports"
+  exit 1
+fi
+
+imports="$(
+  x86_64-w64-mingw32-objdump -p "$rust_artifact" |
+    awk 'tolower($1) == "dll" && tolower($2) == "name:" { print tolower($3) }'
+)"
+while IFS= read -r import; do
+  case "$import" in
+    libgcc_s_seh-1.dll|libstdc++-6.dll|libwinpthread-1.dll|nvcuda.dll|cudart*.dll|nvrtc*.dll)
+      echo "Rust DLL has unshipped runtime import: $import"
+      exit 1
+      ;;
+  esac
+done <<< "$imports"
+'''
+
+[tasks.bench]
+description = "Benchmark the Rust DLL under Wine"
+run = "mise run bench-rust"
+
+[tasks.bench-rust]
+description = "Benchmark the Rust DLL under Wine"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run build-rust
+mise run build-harness
+
+rust_artifact="$TARGET_DIR/rust/$DLL"
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+harness="$HEX_DIR/target/$rust_target/release/hex_dll_harness.exe"
+bench_case="${BENCH_CASE:-all}"
+bench_budget="${BENCH_BUDGET:-1000000}"
+bench_threads="${BENCH_THREADS:-0}"
+bench_repeat="${BENCH_REPEAT:-5}"
+bench_warmup="${BENCH_WARMUP:-1}"
+bench_cuda="${BENCH_CUDA:-default}"
+bench_format="${BENCH_FORMAT:-pretty}"
+bench_color="${BENCH_COLOR:-auto}"
+wine "$harness" bench \
+  --dll "$(winepath -w "$(readlink -f "$rust_artifact")")" \
+  --case "$bench_case" \
+  --budget "$bench_budget" \
+  --threads "$bench_threads" \
+  --repeat "$bench_repeat" \
+  --warmup "$bench_warmup" \
+  --cuda "$bench_cuda" \
+  --format "$bench_format" \
+  --color "$bench_color"
+'''
+
+[tasks.bench-compare]
+description = "Benchmark Rust CPU/CUDA against the Original Brainstorm DLL"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run build-rust
+mise run build-harness
+
+rust_artifact="$TARGET_DIR/rust/$DLL"
+original_dll="${BENCH_ORIGINAL_DLL:-${ORIGINAL_DLL:-$HEX_DIR/Original-Immolate-OceanRamenandMathIsFun0.dll}}"
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+harness="$HEX_DIR/target/$rust_target/release/hex_dll_harness.exe"
+bench_case="${BENCH_CASE:-all}"
+bench_budget="${BENCH_BUDGET:-1000000}"
+bench_threads="${BENCH_THREADS:-0}"
+bench_repeat="${BENCH_REPEAT:-5}"
+bench_warmup="${BENCH_WARMUP:-1}"
+bench_cuda="${BENCH_CUDA:-both}"
+bench_min_ratio="${BENCH_MIN_RATIO:-1.0}"
+bench_fail_on_mismatch="${BENCH_FAIL_ON_MISMATCH:-0}"
+bench_format="${BENCH_FORMAT:-pretty}"
+bench_color="${BENCH_COLOR:-auto}"
+
+if [ ! -f "$original_dll" ]; then
+  echo "original DLL not found: $original_dll"
+  exit 1
+fi
+
+wine "$harness" bench-compare \
+  --rust "$(winepath -w "$(readlink -f "$rust_artifact")")" \
+  --original "$(winepath -w "$(readlink -f "$original_dll")")" \
+  --case "$bench_case" \
+  --budget "$bench_budget" \
+  --threads "$bench_threads" \
+  --repeat "$bench_repeat" \
+  --warmup "$bench_warmup" \
+  --cuda "$bench_cuda" \
+  --min-ratio "$bench_min_ratio" \
+  --fail-on-mismatch "$bench_fail_on_mismatch" \
+  --format "$bench_format" \
+  --color "$bench_color"
+'''
+
+[tasks.bench-compare-windows]
+description = "Benchmark Rust CPU/CUDA against the Original DLL as a native Windows process"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run build-rust
+mise run build-harness
+
+powershell="${POWERSHELL_EXE:-powershell.exe}"
+if ! command -v "$powershell" >/dev/null; then
+  powershell="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
+fi
+command -v "$powershell" >/dev/null || {
+  echo "powershell.exe not found. Run from WSL with Windows interop enabled."
+  exit 1
+}
+
+rust_artifact="$TARGET_DIR/rust/$DLL"
+original_dll="${BENCH_ORIGINAL_DLL:-${ORIGINAL_DLL:-$HEX_DIR/Original-Immolate-OceanRamenandMathIsFun0.dll}}"
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+harness="$HEX_DIR/target/$rust_target/release/hex_dll_harness.exe"
+
+[ -f "$original_dll" ] || { echo "original DLL not found: $original_dll"; exit 1; }
+
+export BS_HARNESS_WIN="$(wslpath -w "$(readlink -f "$harness")")"
+export BS_RUST_DLL_WIN="$(wslpath -w "$(readlink -f "$rust_artifact")")"
+export BS_ORIGINAL_DLL_WIN="$(wslpath -w "$(readlink -f "$original_dll")")"
+export BS_CASE="${BENCH_CASE:-all}"
+export BS_BUDGET="${BENCH_BUDGET:-1000000}"
+export BS_THREADS="${BENCH_THREADS:-0}"
+export BS_REPEAT="${BENCH_REPEAT:-5}"
+export BS_WARMUP="${BENCH_WARMUP:-1}"
+export BS_CUDA="${BENCH_CUDA:-both}"
+export BS_MIN_RATIO="${BENCH_MIN_RATIO:-1.0}"
+export BS_FAIL_ON_MISMATCH="${BENCH_FAIL_ON_MISMATCH:-0}"
+export BS_FORMAT="${BENCH_FORMAT:-pretty}"
+export BS_COLOR="${BENCH_COLOR:-auto}"
+export WSLENV="${WSLENV:+$WSLENV:}BS_HARNESS_WIN/w:BS_RUST_DLL_WIN/w:BS_ORIGINAL_DLL_WIN/w:BS_CASE/w:BS_BUDGET/w:BS_THREADS/w:BS_REPEAT/w:BS_WARMUP/w:BS_CUDA/w:BS_MIN_RATIO/w:BS_FAIL_ON_MISMATCH/w:BS_FORMAT/w:BS_COLOR/w"
+
+"$powershell" -NoProfile -ExecutionPolicy Bypass -Command '
+& $env:BS_HARNESS_WIN bench-compare `
+  --rust $env:BS_RUST_DLL_WIN `
+  --original $env:BS_ORIGINAL_DLL_WIN `
+  --case $env:BS_CASE `
+  --budget $env:BS_BUDGET `
+  --threads $env:BS_THREADS `
+  --repeat $env:BS_REPEAT `
+  --warmup $env:BS_WARMUP `
+  --cuda $env:BS_CUDA `
+  --min-ratio $env:BS_MIN_RATIO `
+  --fail-on-mismatch $env:BS_FAIL_ON_MISMATCH `
+  --format $env:BS_FORMAT `
+  --color $env:BS_COLOR
+'
+'''
+
+[tasks.bench-cuda-long-windows]
+description = "Native Windows long CUDA benchmark from WSL"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+BENCH_CASE="${BENCH_CASE:-cuda-long}" \
+BENCH_BUDGET="${BENCH_BUDGET:-25000000}" \
+BENCH_REPEAT="${BENCH_REPEAT:-3}" \
+BENCH_WARMUP="${BENCH_WARMUP:-1}" \
+BENCH_THREADS="${BENCH_THREADS:-0}" \
+BENCH_CUDA="${BENCH_CUDA:-both}" \
+BENCH_FORMAT="${BENCH_FORMAT:-pretty}" \
+BENCH_COLOR="${BENCH_COLOR:-never}" \
+BENCH_MIN_RATIO="${BENCH_MIN_RATIO:-0.0}" \
+BENCH_FAIL_ON_MISMATCH="${BENCH_FAIL_ON_MISMATCH:-0}" \
+mise run bench-compare-windows
+'''
+
+[tasks.bench-current-compare]
+description = "Counterbalanced current-ABI DLL regression comparison"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+baseline_input="${BENCH_BASELINE_DLL:?Set BENCH_BASELINE_DLL to a frozen current-ABI DLL}"
+candidate_input="${BENCH_CANDIDATE_DLL:-}"
+[[ -f "$baseline_input" ]] || { echo "baseline DLL not found: $baseline_input"; exit 1; }
+
+freeze_dir="$(mktemp -d /tmp/brainstorm-current-compare-XXXXXX)"
+cleanup() {
+  rm -f -- "$freeze_dir/baseline.dll" "$freeze_dir/candidate.dll"
+  rmdir -- "$freeze_dir"
+}
+trap cleanup EXIT
+
+baseline_source="$(readlink -f -- "$baseline_input")"
+baseline="$freeze_dir/baseline.dll"
+cp -- "$baseline_source" "$baseline"
+echo "Frozen baseline: $baseline_source"
+sha256sum "$baseline"
+
+candidate=""
+if [[ -n "$candidate_input" ]]; then
+  [[ -f "$candidate_input" ]] || { echo "candidate DLL not found: $candidate_input"; exit 1; }
+  candidate_source="$(readlink -f -- "$candidate_input")"
+  candidate="$freeze_dir/candidate.dll"
+  cp -- "$candidate_source" "$candidate"
+  echo "Frozen candidate: $candidate_source"
+  sha256sum "$candidate"
+fi
+
+mise run build-harness
+if [[ -z "$candidate" ]]; then
+  mise run build-rust
+  candidate="$TARGET_DIR/rust/$DLL"
+fi
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+native_stage_args=()
+if [[ -n "${BENCH_NATIVE_STAGE_DIR:-}" ]]; then
+  native_stage_args=(--native-stage-dir "$BENCH_NATIVE_STAGE_DIR")
+fi
+cargo run --quiet \
+  --manifest-path "$HEX_DIR/Cargo.toml" \
+  --release \
+  --bin bench_current_compare \
+  -- \
+  --harness "$HEX_DIR/target/$rust_target/release/hex_dll_harness.exe" \
+  --baseline "$baseline" \
+  --candidate "$candidate" \
+  --executor "${BENCH_EXECUTOR:-native}" \
+  "${native_stage_args[@]}" \
+  --case "${BENCH_CASE:-ux}" \
+  --budget "${BENCH_BUDGET:-100000}" \
+  --threads "${BENCH_THREADS:-0}" \
+  --repeat "${BENCH_REPEAT:-31}" \
+  --warmup "${BENCH_WARMUP:-3}" \
+  --cycles "${BENCH_CURRENT_CYCLES:-4}" \
+  --min-ratio "${BENCH_CURRENT_MIN_RATIO:-0.99}" \
+  --min-regression-ms "${BENCH_CURRENT_MIN_REGRESSION_MS:-0.005}"
+'''
+
+[tasks.bench-full]
+description = "Full-suite Rust vs Original benchmark report"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+BENCH_CASE=all \
+BENCH_BUDGET=100000 \
+BENCH_REPEAT=5 \
+BENCH_WARMUP=2 \
+BENCH_THREADS=0 \
+BENCH_CUDA=both \
+BENCH_FORMAT=tsv \
+BENCH_COLOR=never \
+BENCH_MIN_RATIO=1.0 \
+mise run bench-compare
+'''
+
+[tasks.bench-ux]
+description = "DLL UX-fixture benchmark report using UI-reachable cases"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+BENCH_CASE=ux \
+BENCH_BUDGET=100000 \
+BENCH_REPEAT=5 \
+BENCH_WARMUP=2 \
+BENCH_THREADS=0 \
+BENCH_CUDA=both \
+BENCH_FORMAT=tsv \
+BENCH_COLOR=never \
+BENCH_MIN_RATIO=1.0 \
+mise run bench-compare
+'''
+
+[tasks.bench-pretty]
+description = "Full-suite human-readable benchmark report"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+BENCH_CASE=all \
+BENCH_BUDGET=1000000 \
+BENCH_REPEAT=7 \
+BENCH_WARMUP=2 \
+BENCH_THREADS=0 \
+BENCH_CUDA=both \
+BENCH_FORMAT=pretty \
+BENCH_COLOR=always \
+BENCH_MIN_RATIO=1.0 \
+mise run bench-compare
+'''
+
+[tasks.check-rust]
+description = "Run Rust format, clippy, tests, DLL validation, and benchmark smoke"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run fmt-rust-check
+mise run clippy-rust
+mise run doc-rust
+mise run test-rust
+mise run check-rust-dll
+mise run build-harness
+
+rust_artifact="$TARGET_DIR/rust/$DLL"
+rust_target="${RUST_TARGET:-x86_64-pc-windows-gnu}"
+harness="$HEX_DIR/target/$rust_target/release/hex_dll_harness.exe"
+
+smoke_bench() {
+  bench_case="$1"
+  bench_budget="$2"
+
+  echo "Benchmarking Rust $DLL smoke: $bench_case"
+  wine "$harness" bench \
+    --dll "$(winepath -w "$(readlink -f "$rust_artifact")")" \
+    --case "$bench_case" \
+    --budget "$bench_budget" \
+    --threads "${BENCH_THREADS:-0}" \
+    --repeat 1 \
+    --warmup "${BENCH_WARMUP:-1}" \
+    --cuda both \
+    --format "${BENCH_FORMAT:-pretty}" \
+    --color "${BENCH_COLOR:-auto}"
+}
+
+smoke_bench tag-hit 1000
+smoke_bench ux-tag-soul-pack 20000
+'''
+
+[tasks.check]
+description = "Run Lua lint, lifecycle smoke, and the Rust DLL validation gate"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run lint-lua
+mise run test-lua
+mise run check-rust
+'''
+
+[tasks.test-lua]
+description = "Run mocked Lua module, frame, and status-text lifecycle smoke"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+luajit tests/lua_lifecycle_smoke.lua "$(pwd)"
+luajit tests/lua_ui_smoke.lua "$(pwd)"
+'''
+
+[tasks.format]
+description = "Format Lua and Rust"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+lua_files=(Brainstorm.lua UI.lua steamodded_compat.lua tests/lua_lifecycle_smoke.lua tests/lua_ui_smoke.lua)
+stylua "${lua_files[@]}"
+cargo fmt --manifest-path "$HEX_DIR/Cargo.toml"
+'''
+
+[tasks.lint-lua]
+description = "Check Lua formatting, bytecode syntax, luacheck, and version metadata"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+export PATH="$HOME/.luarocks/bin:$PATH"
+lua_files=(Brainstorm.lua UI.lua steamodded_compat.lua)
+test_lua_files=(tests/lua_lifecycle_smoke.lua tests/lua_ui_smoke.lua)
+syntax_lua_files=("${lua_files[@]}" "${test_lua_files[@]}")
+luacheck_files=("${lua_files[@]}" "${test_lua_files[@]}")
+
+command -v stylua >/dev/null || { echo "stylua not found. Install Stylua, then run: mise run doctor"; exit 1; }
+command -v luajit >/dev/null || { echo "luajit not found. Install LuaJIT, then run: mise run doctor"; exit 1; }
+command -v luacheck >/dev/null || { echo "luacheck not found. Run: mise run setup-lua"; exit 1; }
+
+stylua --check "${lua_files[@]}" "${test_lua_files[@]}"
+for lua_file in "${syntax_lua_files[@]}"; do
+  luajit -b "$lua_file" /dev/null
+done
+luacheck "${luacheck_files[@]}"
+mise run check-version
+'''
+
+[tasks.lint-rust]
+description = "Check Rust formatting plus host and Windows clippy and documentation"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run fmt-rust-check
+mise run clippy-rust
+mise run doc-rust
+'''
+
+[tasks.lint]
+description = "Check Lua and Rust formatting/lints"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run lint-lua
+mise run lint-rust
+'''
+
+[tasks.stage-payload]
+description = "Stage the Brainstorm OVERHAULED install payload under target/package/Brainstorm"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+version_number="$(sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1)"
+stage_root="$TARGET_DIR/package"
+stage_dir="$stage_root/Brainstorm"
+rust_artifact="$TARGET_DIR/rust/$DLL"
+
+[ -n "$version_number" ] || {
+  echo "lovely.toml manifest version is missing"
+  exit 1
+}
+[ -f "$rust_artifact" ] || mise run build-rust
+
+rm -rf "$stage_root"
+mkdir -p "$stage_dir"
+cp Brainstorm.lua UI.lua lovely.toml steamodded_compat.lua LICENSE NOTICE.md "$stage_dir"/
+cp "$rust_artifact" "$stage_dir/$DLL"
+sed -i -E '0,/^dump_lua = .*/s//dump_lua = false/' "$stage_dir/lovely.toml"
+printf '%s\n' "$version_number" > "$stage_dir/VERSION"
+'''
+
+[tasks.release]
+description = "Build, validate, and package release zip"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run check
+mise run stage-payload
+
+version_number="$(sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1)"
+package_dir="Brainstorm"
+package_zip="Brainstorm_OVERHAULED_v$version_number.zip"
+stage_dir="$TARGET_DIR/package/$package_dir"
+release_dir="release/$package_dir"
+rust_artifact="$TARGET_DIR/rust/$DLL"
+
+rm -rf release
+mkdir -p release
+cp -a "$stage_dir" "$release_dir"
+zip_path="release/$package_zip"
+command -v zip >/dev/null || { echo "zip not found"; exit 1; }
+command -v unzip >/dev/null || { echo "unzip not found"; exit 1; }
+(cd release && zip -r "$package_zip" "$package_dir" >/dev/null)
+test -s "$zip_path"
+
+expected_manifest="$(
+  printf '%s\n' \
+    Brainstorm/ \
+    Brainstorm/Brainstorm.lua \
+    Brainstorm/Hex.dll \
+    Brainstorm/LICENSE \
+    Brainstorm/NOTICE.md \
+    Brainstorm/UI.lua \
+    Brainstorm/VERSION \
+    Brainstorm/lovely.toml \
+    Brainstorm/steamodded_compat.lua | sort
+)"
+actual_manifest="$(unzip -Z1 "$zip_path" | sort)"
+[ "$actual_manifest" = "$expected_manifest" ] || {
+  echo "unexpected release archive contents:"
+  printf '%s\n' "$actual_manifest"
+  exit 1
+}
+[ "$(unzip -p "$zip_path" Brainstorm/VERSION)" = "$version_number" ] || {
+  echo "packaged VERSION does not match $version_number"
+  exit 1
+}
+unzip -p "$zip_path" Brainstorm/lovely.toml | grep -Fx 'dump_lua = false' >/dev/null || {
+  echo "packaged lovely.toml must disable Lua dumping"
+  exit 1
+}
+packaged_dll_hash="$(unzip -p "$zip_path" Brainstorm/Hex.dll | sha256sum | awk '{print $1}')"
+built_dll_hash="$(sha256sum "$rust_artifact" | awk '{print $1}')"
+[ "$packaged_dll_hash" = "$built_dll_hash" ] || {
+  echo "packaged Hex.dll differs from $rust_artifact"
+  exit 1
+}
+echo "created $zip_path"
+'''
+
+[tasks.publish-release]
+description = "Build locally and publish an immutable GitHub release without CI"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+for command_name in gh git sha256sum unzip; do
+  command -v "$command_name" >/dev/null || {
+    echo "$command_name not found"
+    exit 1
+  }
+done
+gh auth status --hostname github.com >/dev/null
+[ "$(gh api 'repos/{owner}/{repo}/immutable-releases' --jq .enabled)" = "true" ] || {
+  echo "GitHub release immutability must be enabled"
+  exit 1
+}
+[ "$(git branch --show-current)" = "master" ] || {
+  echo "publish-release must run from master"
+  exit 1
+}
+git diff --quiet -- && git diff --cached --quiet -- || {
+  echo "tracked files must be committed before publishing"
+  exit 1
+}
+
+mise run check-version
+version_number="$(sed -n 's/^version = "\([^"]*\)"/\1/p' lovely.toml | head -n1)"
+release_tag="v$version_number"
+package_zip="Brainstorm_OVERHAULED_v$version_number.zip"
+zip_path="release/$package_zip"
+
+git fetch --quiet origin master
+head_commit="$(git rev-parse HEAD)"
+[ "$head_commit" = "$(git rev-parse origin/master)" ] || {
+  echo "local master must exactly match origin/master"
+  exit 1
+}
+existing_release_state="$(
+  gh release view "$release_tag" --json isDraft --jq .isDraft 2>/dev/null || printf 'none\n'
+)"
+if [ "$existing_release_state" = "false" ]; then
+  echo "published release $release_tag already exists; releases are immutable"
+  exit 1
+fi
+
+"${NVCC:-nvcc}" --version | grep -F 'V12.4' >/dev/null || {
+  echo "production releases require CUDA Toolkit 12.4"
+  exit 1
+}
+[ "$("${CUDAHOSTCXX:-gcc-12}" -dumpversion | cut -d. -f1)" = "12" ] || {
+  echo "production releases require GCC 12 as the CUDA host compiler"
+  exit 1
+}
+"${CUOBJDUMP:-cuobjdump}" --version | grep -F 'V12.4' >/dev/null || {
+  echo "production releases require CUDA cuobjdump 12.4"
+  exit 1
+}
+
+BRAINSTORM_CUDA_ARCHES=50,52,60,61,70,75,80,86,89,90 \
+BRAINSTORM_CUDA_PTX_ARCH=89 \
+BRAINSTORM_CUDA_PRODUCTION=1 \
+mise run release
+
+(cd release && sha256sum "$package_zip" > SHA256SUMS.txt)
+(cd release && sha256sum --check --strict SHA256SUMS.txt)
+
+git fetch --quiet origin master
+[ "$(git rev-parse HEAD)" = "$head_commit" ] \
+  && [ "$(git rev-parse origin/master)" = "$head_commit" ] \
+  && git diff --quiet -- \
+  && git diff --cached --quiet -- || {
+  echo "HEAD, tracked files, or origin/master changed during the release build"
+  exit 1
+}
+
+validate_local_tag() {
+  [ "$(git cat-file -t "refs/tags/$release_tag")" = "tag" ] || {
+    echo "$release_tag must be an annotated tag"
+    exit 1
+  }
+  [ "$(git rev-parse "$release_tag^{}")" = "$head_commit" ] || {
+    echo "$release_tag does not point to HEAD"
+    exit 1
+  }
+}
+
+remote_tags="$(git ls-remote --tags origin "refs/tags/$release_tag" "refs/tags/$release_tag^{}")"
+if [ -z "$remote_tags" ]; then
+  if ! git rev-parse --verify --quiet "refs/tags/$release_tag" >/dev/null; then
+    git tag --annotate "$release_tag" --message "Brainstorm OVERHAULED $release_tag"
+  fi
+  validate_local_tag
+  git push origin "refs/tags/$release_tag"
+else
+  if ! git rev-parse --verify --quiet "refs/tags/$release_tag" >/dev/null; then
+    git fetch --quiet origin "refs/tags/$release_tag:refs/tags/$release_tag"
+  fi
+  validate_local_tag
+  remote_tag_object="$(printf '%s\n' "$remote_tags" | awk '!/\^\{\}$/ {print $1}')"
+  remote_commit="$(printf '%s\n' "$remote_tags" | awk '/\^\{\}$/ {print $1}')"
+  [ "$remote_tag_object" = "$(git rev-parse "refs/tags/$release_tag")" ] || {
+    echo "remote $release_tag differs from the local annotated tag"
+    exit 1
+  }
+  [ "$remote_commit" = "$head_commit" ] || {
+    echo "remote $release_tag is not the annotated tag for HEAD"
+    exit 1
+  }
+fi
+
+if [ "$existing_release_state" = "true" ]; then
+  [ "$(gh release view "$release_tag" --json isDraft --jq .isDraft)" = "true" ] || {
+    echo "release $release_tag changed while the package was building"
+    exit 1
+  }
+  echo "discarding incomplete draft release $release_tag"
+  gh release delete "$release_tag" --yes
+fi
+
+gh release create "$release_tag" "$zip_path" release/SHA256SUMS.txt \
+  --draft \
+  --verify-tag \
+  --title "Brainstorm OVERHAULED $release_tag" \
+  --notes-file - <<EOF
+Brainstorm OVERHAULED production release.
+
+Requirements: 64-bit Windows Balatro with Lovely and Steamodded installed.
+
+- Lovely: https://github.com/ethangreen-dev/lovely-injector
+- Steamodded: https://github.com/Steamodded/smods/wiki/Installing-Steamodded-windows#step-3-installing-steamodded
+
+Experimental CUDA acceleration is included but disabled by default. Enable it
+in the mod settings on a compatible NVIDIA GPU. It requires no CUDA Toolkit or
+custom files and falls back to CPU automatically when unavailable or
+unsupported.
+
+Brainstorm OVERHAULED is KRVH's full rewrite of OceanRamen's original
+Brainstorm. Hex is KRVH's Rust rewrite of the core seed-search engine from
+MathIsFun0's original Immolate, source-verified against Balatro and extended
+for Brainstorm.
+
+Install:
+
+1. Under Assets, download $package_zip—not GitHub's Source code archives.
+2. Extract its included Brainstorm folder into %AppData%\Balatro\Mods\.
+3. Reload Balatro.
+EOF
+
+verify_dir="$(mktemp -d /tmp/brainstorm-release-verify-XXXXXX)"
+trap 'rm -rf "$verify_dir"' EXIT
+gh release download "$release_tag" --dir "$verify_dir"
+expected_assets="$(printf '%s\n' SHA256SUMS.txt "$package_zip" | sort)"
+actual_assets="$(find "$verify_dir" -maxdepth 1 -type f -printf '%f\n' | sort)"
+[ "$actual_assets" = "$expected_assets" ] || {
+  echo "unexpected downloaded release assets:"
+  printf '%s\n' "$actual_assets"
+  exit 1
+}
+(cd "$verify_dir" && sha256sum --check --strict SHA256SUMS.txt)
+[ "$(unzip -p "$verify_dir/$package_zip" Brainstorm/VERSION)" = "$version_number" ] || {
+  echo "downloaded package VERSION does not match $version_number"
+  exit 1
+}
+
+gh release edit "$release_tag" --draft=false --latest
+[ "$(gh release view "$release_tag" --json isDraft --jq .isDraft)" = "false" ]
+[ "$(gh api 'repos/{owner}/{repo}/releases/latest' --jq .tag_name)" = "$release_tag" ]
+echo "published Brainstorm OVERHAULED $release_tag"
+'''
+
+[tasks.deploy]
+description = "Build, validate, and copy the mod to TARGET"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+mise run check
+mise run stage-payload
+
+resolve_target() {
+  if [ -n "${TARGET:-}" ]; then
+    printf '%s\n' "$TARGET"
+    return
+  fi
+  if command -v powershell.exe >/dev/null && command -v wslpath >/dev/null; then
+    appdata="$(powershell.exe -NoProfile -Command '[Environment]::GetFolderPath("ApplicationData")' | tr -d '\r' | tail -n1)"
+    if [ -n "$appdata" ]; then
+      wslpath "$appdata/Balatro/Mods/Brainstorm"
+      return
+    fi
+  fi
+  echo "Set TARGET to your Balatro Mods/Brainstorm directory." >&2
+  exit 1
+}
+
+target="$(resolve_target)"
+stage_dir="$TARGET_DIR/package/Brainstorm"
+
+if [ "$(basename "$target")" != "Brainstorm" ]; then
+  echo "TARGET must end with /Brainstorm: $target"
+  exit 1
+fi
+
+echo "Deploying to $target"
+mkdir -p "$target"
+rsync -a --delete "$stage_dir"/ "$target"/
+'''
+
+[tasks.clean]
+description = "Remove build and release artifacts"
+run = "rm -rf Hex/target release target && rm -f Hex.dll"

@@ -1,0 +1,21 @@
+# Normalize source and docs to LF by default.
+* text=auto eol=lf
+
+# Source
+*.lua text
+*.rs text
+
+# Config and project metadata
+*.lock text
+*.toml text
+.gitattributes text
+.gitignore text
+.luacheckrc text
+
+# Docs
+*.md text diff=markdown
+LICENSE text
+
+# Native/release artifacts
+*.dll binary
+*.zip binary
